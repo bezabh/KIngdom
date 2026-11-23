@@ -1,0 +1,404 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connection test document
+    match /test/connection {
+      allow get: if isSignedIn();
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() == 'beckylove2004@gmail.com';
+    }
+
+    function isEmailKeyOwner(userId) {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower().replace('[^a-z0-9]', '_') == userId;
+    }
+
+    function isUserOwner(userId) {
+      return isSignedIn() && (
+        request.auth.uid == userId ||
+        isEmailKeyOwner(userId) ||
+        isSuperAdmin()
+      );
+    }
+
+    function isSafeMemberProfileCreate() {
+      return (!('role' in request.resource.data) || !(request.resource.data.role in ['Creator', 'Admin', 'Super Admin']))
+        && (!('isPro' in request.resource.data) || request.resource.data.isPro == false)
+        && (!('customPrivilegesEnabled' in request.resource.data) || request.resource.data.customPrivilegesEnabled == false);
+    }
+
+    function isSafeMemberProfileUpdate() {
+      return (!('role' in request.resource.data)
+          || !(request.resource.data.role in ['Creator', 'Admin', 'Super Admin'])
+          || ('role' in resource.data && request.resource.data.role == resource.data.role))
+        && (!('isPro' in request.resource.data)
+          || ('isPro' in resource.data && request.resource.data.isPro == resource.data.isPro))
+        && (!('customPrivilegesEnabled' in request.resource.data)
+          || request.resource.data.customPrivilegesEnabled == false
+          || ('customPrivilegesEnabled' in resource.data && request.resource.data.customPrivilegesEnabled == resource.data.customPrivilegesEnabled));
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.@]+$');
+    }
+
+    function isValidPaymentMethod(data, methodId) {
+      return data.keys().hasAll(['id', 'userId', 'userEmail', 'type', 'label', 'providerBadge', 'currency', 'isDefault', 'isVerified', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'userId', 'authUid', 'userEmail', 'type', 'label', 'providerBadge',
+          'last4', 'brand', 'expiry', 'holderName', 'phoneNumber', 'email',
+          'bankName', 'swiftCode', 'country', 'currency', 'isDefault', 'isVerified',
+          'createdAt', 'updatedAt'
+        ])
+        && !('cardNumber' in data) && !('cvv' in data) && !('cvc' in data) && !('pan' in data)
+        && data.id is string && data.id == methodId && isValidId(data.id)
+        && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+        && data.userEmail is string && data.userEmail.size() >= 3 && data.userEmail.size() <= 200
+        && data.type in ['card', 'telebirr', 'cbe_birr', 'google_pay', 'apple_pay', 'paypal', 'bank_wire']
+        && data.label is string && data.label.size() >= 1 && data.label.size() <= 120
+        && data.providerBadge is string && data.providerBadge.size() >= 1 && data.providerBadge.size() <= 60
+        && data.currency is string && data.currency.size() == 3
+        && data.isDefault is bool
+        && data.isVerified is bool
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64
+        && (!('authUid' in data) || (data.authUid is string && data.authUid.size() <= 128))
+        && (!('last4' in data) || (data.last4 is string && data.last4.size() <= 4))
+        && (!('brand' in data) || data.brand in ['visa', 'mastercard', 'amex', 'discover', 'sovereign'])
+        && (!('expiry' in data) || (data.expiry is string && data.expiry.size() <= 10))
+        && (!('holderName' in data) || (data.holderName is string && data.holderName.size() <= 120))
+        && (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 32))
+        && (!('email' in data) || (data.email is string && data.email.size() <= 200))
+        && (!('bankName' in data) || (data.bankName is string && data.bankName.size() <= 120))
+        && (!('swiftCode' in data) || (data.swiftCode is string && data.swiftCode.size() <= 32))
+        && (!('country' in data) || (data.country is string && data.country.size() <= 80));
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (
+        isUserOwner(userId) ||
+        (isSignedIn() && resource != null && (
+          ('uid' in resource.data && resource.data.uid == request.auth.uid) ||
+          ('authUid' in resource.data && resource.data.authUid == request.auth.uid) ||
+          (request.auth.token.email != null && request.auth.token.email_verified == true && 'email' in resource.data && resource.data.email == request.auth.token.email.lower())
+        ))
+      );
+      allow list: if isSuperAdmin();
+      allow create: if isValidId(userId) && (
+        isSuperAdmin() ||
+        (isUserOwner(userId) && isSafeMemberProfileCreate())
+      );
+      allow update: if isValidId(userId) && (
+        isSuperAdmin() ||
+        (isUserOwner(userId) && isSafeMemberProfileUpdate())
+      );
+      allow delete: if isValidId(userId) && isSuperAdmin();
+
+      match /conversations/{conversationId} {
+        allow get, create, update, delete: if isValidId(conversationId) && isUserOwner(userId);
+        allow list: if isUserOwner(userId);
+      }
+
+      match /files/{fileId} {
+        allow get, create, update, delete: if isValidId(fileId) && isUserOwner(userId);
+        allow list: if isUserOwner(userId);
+      }
+
+      match /saved/{itemId} {
+        allow get, create, update, delete: if isValidId(itemId) && isUserOwner(userId);
+        allow list: if isUserOwner(userId);
+      }
+
+      match /notifications/{notificationId} {
+        allow get, create, update, delete: if isValidId(notificationId) && isUserOwner(userId);
+        allow list: if isUserOwner(userId);
+      }
+
+      match /payment_methods/{methodId} {
+        function isMethodOwner() {
+          return isSignedIn() && (
+            request.auth.uid == userId ||
+            isSuperAdmin() ||
+            (resource != null && (
+              resource.data.authUid == request.auth.uid ||
+              (request.auth.token.email != null && request.auth.token.email_verified == true && resource.data.userEmail == request.auth.token.email)
+            ))
+          );
+        }
+        allow get: if isValidId(methodId) && isMethodOwner();
+        allow list: if isMethodOwner();
+        allow create: if isSignedIn()
+          && isValidId(methodId)
+          && isValidPaymentMethod(request.resource.data, methodId)
+          && (
+            request.auth.uid == userId ||
+            request.resource.data.authUid == request.auth.uid ||
+            isSuperAdmin()
+          );
+        allow update: if isValidId(methodId)
+          && isMethodOwner()
+          && isValidPaymentMethod(request.resource.data, methodId)
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isValidId(methodId) && isMethodOwner();
+      }
+
+      match /voice_translation_logs/{logId} {
+        function isVoiceLogOwner() {
+          return isSignedIn() && (
+            request.auth.uid == userId ||
+            isSuperAdmin() ||
+            (resource != null && resource.data.authUid == request.auth.uid)
+          );
+        }
+
+        function isValidVoiceLog(data, id) {
+          return isValidId(id)
+            && data.keys().hasAll([
+              'id', 'userId', 'userEmail', 'speaker', 'sourceLanguage', 'targetLanguage',
+              'sourceTranscript', 'translatedText', 'timestamp', 'createdAt'
+            ])
+            && data.keys().hasOnly([
+              'id', 'userId', 'authUid', 'userEmail', 'speaker', 'sourceLanguage', 'targetLanguage',
+              'sourceTranscript', 'translatedText', 'spokenTargetText', 'transliteration',
+              'scriptName', 'culturalContext', 'wordBreakdown', 'latencyMs', 'timestamp', 'createdAt'
+            ])
+            && data.id is string && data.id == id
+            && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+            && (!('authUid' in data) || (data.authUid is string && data.authUid == request.auth.uid && data.authUid.size() <= 128))
+            && data.userEmail is string && data.userEmail.size() >= 3 && data.userEmail.size() <= 200
+            && data.speaker in ['A', 'B']
+            && data.sourceLanguage is string && data.sourceLanguage.size() >= 1 && data.sourceLanguage.size() <= 64
+            && data.targetLanguage is string && data.targetLanguage.size() >= 1 && data.targetLanguage.size() <= 64
+            && data.sourceTranscript is string && data.sourceTranscript.size() <= 2000
+            && data.translatedText is string && data.translatedText.size() <= 2000
+            && (!('spokenTargetText' in data) || (data.spokenTargetText is string && data.spokenTargetText.size() <= 2000))
+            && (!('transliteration' in data) || (data.transliteration is string && data.transliteration.size() <= 2000))
+            && (!('scriptName' in data) || (data.scriptName is string && data.scriptName.size() <= 100))
+            && (!('culturalContext' in data) || (data.culturalContext is string && data.culturalContext.size() <= 1000))
+            && (!('wordBreakdown' in data) || (data.wordBreakdown is list && data.wordBreakdown.size() <= 12))
+            && (!('latencyMs' in data) || (data.latencyMs is number && data.latencyMs >= 0 && data.latencyMs <= 120000))
+            && data.timestamp is string && data.timestamp.size() <= 64
+            && data.createdAt is string && data.createdAt.size() <= 64;
+        }
+
+        allow get: if isValidId(logId) && isVoiceLogOwner();
+        allow list: if isSignedIn() && (
+          request.auth.uid == userId ||
+          isSuperAdmin() ||
+          resource.data.authUid == request.auth.uid
+        );
+        allow create: if isSignedIn()
+          && isValidVoiceLog(request.resource.data, logId)
+          && (
+            request.auth.uid == userId ||
+            request.resource.data.authUid == request.auth.uid ||
+            isSuperAdmin()
+          );
+        allow update: if isVoiceLogOwner()
+          && isValidVoiceLog(request.resource.data, logId)
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isValidId(logId) && isVoiceLogOwner();
+      }
+
+      match /conversation_sessions/{sessionId} {
+        allow get, list: if isUserOwner(userId);
+        allow create, update: if isUserOwner(userId) && isValidId(sessionId)
+          && request.resource.data.keys().hasAll(['id', 'userId', 'userEmail', 'personALang', 'personBLang', 'turnCount', 'createdAt', 'updatedAt'])
+          && request.resource.data.id == sessionId
+          && request.resource.data.userId is string && request.resource.data.userId.size() <= 128
+          && request.resource.data.transcriptSummary is string && request.resource.data.transcriptSummary.size() <= 4000;
+        allow delete: if isUserOwner(userId) && isValidId(sessionId);
+      }
+
+      match /call_sessions/{callId} {
+        allow get, list: if isUserOwner(userId);
+        allow create, update: if isUserOwner(userId) && isValidId(callId)
+          && request.resource.data.keys().hasAll(['id', 'userId', 'userEmail', 'roomCode', 'callType', 'localLanguage', 'remoteLanguage', 'createdAt'])
+          && request.resource.data.id == callId
+          && request.resource.data.callType in ['audio', 'video']
+          && (!('transcriptText' in request.resource.data) || (request.resource.data.transcriptText is string && request.resource.data.transcriptText.size() <= 4000));
+        allow delete: if isUserOwner(userId) && isValidId(callId);
+      }
+
+      match /ocr_documents/{docId} {
+        allow get, list: if isUserOwner(userId);
+        allow create, update: if isUserOwner(userId) && isValidId(docId)
+          && request.resource.data.keys().hasAll(['id', 'userId', 'userEmail', 'title', 'captureSource', 'targetLanguage', 'originalText', 'translatedText', 'createdAt'])
+          && request.resource.data.id == docId
+          && request.resource.data.captureSource in ['screen_capture', 'camera_ocr', 'image_upload']
+          && request.resource.data.originalText is string && request.resource.data.originalText.size() <= 4000
+          && request.resource.data.translatedText is string && request.resource.data.translatedText.size() <= 4000;
+        allow delete: if isUserOwner(userId) && isValidId(docId);
+      }
+
+      match /language_packs/{packId} {
+        allow get, list: if isUserOwner(userId);
+        allow create, update: if isUserOwner(userId) && isValidId(packId)
+          && request.resource.data.keys().hasAll(['id', 'userId', 'userEmail', 'languageCode', 'languageName', 'version', 'sizeBytes', 'downloadedAt'])
+          && request.resource.data.id == packId
+          && request.resource.data.sizeBytes is number && request.resource.data.sizeBytes >= 0;
+        allow delete: if isUserOwner(userId) && isValidId(packId);
+      }
+    }
+
+    // Direct User Files Collection
+    match /userFiles/{fileId} {
+      allow get: if isValidId(fileId) && isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow create: if isValidId(fileId) && isSignedIn() && (
+        request.resource.data.userId == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow update, delete: if isValidId(fileId) && isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isSuperAdmin()
+      );
+    }
+
+    // Legacy Payments (Read-only to owner / admin; server-only writes)
+    match /payments/{paymentId} {
+      allow get: if isValidId(paymentId) && isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.user_id == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.user_id == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow write: if false;
+    }
+
+    // PayPal Subscriptions: Users can ONLY read their own; ONLY trusted server-side Firebase Admin can write
+    match /subscriptions/{subscriptionId} {
+      allow get: if isValidId(subscriptionId) && isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.user_id == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.user_id == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow write: if false;
+    }
+
+    // PayPal Payment History: Users can ONLY read their own; ONLY trusted server-side Firebase Admin can write
+    match /payment_history/{paymentId} {
+      allow get: if isValidId(paymentId) && isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow write: if false;
+    }
+
+    // User Entitlements (Pro vs Free): Users can ONLY read their own; ONLY trusted server-side Firebase Admin can write
+    match /user_entitlements/{uid} {
+      allow get: if isValidId(uid) && isSignedIn() && (
+        request.auth.uid == uid ||
+        (resource != null && resource.data.uid == request.auth.uid) ||
+        isSuperAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow write: if false;
+    }
+
+    // PayPal Webhook Event Deduplication & Payment Audit Logs: strictly server-only (Admin SDK bypasses rules)
+    match /paypal_webhook_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /payment_audit_logs/{logId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
+    // SaaS User Usage (Read own or SuperAdmin; server/SuperAdmin writes)
+    match /saas_usage/{userId} {
+      allow get: if isValidId(userId) && isSignedIn() && (
+        request.auth.uid == userId ||
+        resource.data.userId == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow write: if isSuperAdmin();
+    }
+
+    // Support Tickets
+    match /support_tickets/{ticketId} {
+      allow get: if isValidId(ticketId) && isSignedIn() && (
+        resource.data.customerId == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow create: if isValidId(ticketId) && isSignedIn() && (
+        request.resource.data.customerId == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow update: if isValidId(ticketId) && isSignedIn() && (
+        resource.data.customerId == request.auth.uid ||
+        isSuperAdmin()
+      );
+      allow delete: if isValidId(ticketId) && isSuperAdmin();
+    }
+
+    // System Configuration
+    match /system/{configId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // Super Admin Immutable Audit Logs
+    match /audit_logs/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if isValidId(logId) && isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // System Backups
+    match /backups/{backupId} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}

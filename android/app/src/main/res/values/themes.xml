@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AxumiteAI" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/colorGold</item>
+        <item name="colorPrimaryVariant">@color/colorGoldDark</item>
+        <item name="colorOnPrimary">@color/colorTextDark</item>
+        <item name="colorSecondary">@color/colorGoldLight</item>
+        <item name="colorSecondaryVariant">@color/colorGoldDark</item>
+        <item name="colorOnSecondary">@color/colorTextDark</item>
+        <item name="android:statusBarColor">@color/colorBackgroundDark</item>
+        <item name="android:navigationBarColor">@color/colorBackgroundDark</item>
+        <item name="android:windowBackground">@color/colorBackgroundDark</item>
+    </style>
+
+    <style name="Theme.AxumiteAI.PopupOverlay" parent="ThemeOverlay.MaterialComponents.Light" />
+</resources>

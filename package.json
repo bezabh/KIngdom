@@ -1,0 +1,57 @@
+{
+  "name": "react-example",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "vite build && mkdir -p dist && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && node -e \"console.log('Build completed successfully. Output location: dist/ (Client SPA) & dist/server.cjs (Server bundle)')\"",
+    "start": "NODE_ENV=production node server.js",
+    "preview": "vite preview",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit",
+    "postinstall": "node --input-type=module -e \"import fs from 'node:fs'; if (fs.existsSync('scripts/postinstall-build.mjs')) await import('./scripts/postinstall-build.mjs');\"",
+    "verify:deploy": "node scripts/verify-deploy.mjs"
+  },
+  "dependencies": {
+    "@firebase/eslint-plugin-security-rules": "^0.0.2",
+    "@google/genai": "^3.4.0",
+    "@paypal/paypal-js": "^11.3.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^5.0.4",
+    "canvas-confetti": "^1.9.4",
+    "d3": "^7.9.0",
+    "dotenv": "^17.2.3",
+    "esbuild": "^0.25.0",
+    "eslint": "^10.15.0",
+    "express": "^4.21.2",
+    "firebase": "^12.18.0",
+    "firebase-admin": "^14.5.1",
+    "html-to-image": "^1.11.13",
+    "jspdf": "^4.2.1",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.546.0",
+    "motion": "^12.23.24",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1",
+    "recharts": "^3.10.1",
+    "tailwindcss": "^4.1.14",
+    "vite": "^6.2.3",
+    "ws": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/d3": "^7.4.3",
+    "@types/express": "^4.17.21",
+    "@types/jszip": "^3.4.1",
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2"
+  }
+}

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ኣክሱማይት AI</string>
+    <string name="app_name_en">Axumite AI Sovereign</string>
+    <string name="toggle_language">Switch Language</string>
+    <string name="title_diagnostics">System Diagnostics</string>
+    
+    <!-- Hero Banner -->
+    <string name="hero_banner_title">ኦበሊስክ AI • ባንክን ባህልን</string>
+    <string name="hero_banner_subtitle">Native Android flagship intelligence with offline Ge\'ez OCR, Tigrinya speech processing, and secure Telebirr integration.</string>
+    <string name="action_start_voice">Start Tigrinya Voice Chat</string>
+    
+    <!-- Modules -->
+    <string name="section_native_modules">Native Axumite Modules</string>
+    <string name="module_chat_title">Obelisk AI Chat</string>
+    <string name="module_chat_desc">Conversational Tigrinya LLM</string>
+    
+    <string name="module_ocr_title">Ge\'ez Camera OCR</string>
+    <string name="module_ocr_desc">Manuscript &amp; Stela Reader</string>
+    
+    <string name="module_telebirr_title">Telebirr Wallet</string>
+    <string name="module_telebirr_desc">Instant Mobile Payments</string>
+    
+    <string name="module_dict_title">Heritage Lexicon</string>
+    <string name="module_dict_desc">Ge\'ez-Tigrinya Dictionary</string>
+    
+    <!-- Chat Screen -->
+    <string name="chat_screen_title">Obelisk Sovereign Chat</string>
+    <string name="hint_type_tigrinya_message">ትግርኛ ወይ ድማ ሕቶኹም ኣብዚ ጸሓፉ...</string>
+    <string name="action_send">Send</string>
+    <string name="action_voice_input">Voice Input</string>
+    <string name="action_back">Back</string>
+    <string name="action_clear_chat">Clear History</string>
+    
+    <!-- OCR Screen -->
+    <string name="ocr_screen_title">Ge\'ez Inscription Scanner</string>
+    <string name="action_flash">Toggle Flashlight</string>
+    <string name="action_capture_ocr">Capture Inscription</string>
+    
+    <!-- Telebirr Screen -->
+    <string name="telebirr_screen_title">Telebirr Native Bridge</string>
+    
+    <!-- Dictionary Screen -->
+    <string name="dict_screen_title">Heritage Dictionary</string>
+    
+    <!-- Splash Screen -->
+    <string name="splash_motto">Sovereign Artificial Intelligence for Horn of Africa</string>
+    <string name="splash_loading">Initializing Axumite Neural Engines &amp; KeyStore...</string>
+    <string name="splash_loading_ti">ኦበሊስክ AI ንባዮሜትሪክን ይዳሎ ኣሎ...</string>
+    <string name="splash_footer">Android 15 (API 35) • StrongBox TEE • Java 17</string>
+</resources>

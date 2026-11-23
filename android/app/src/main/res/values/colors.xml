@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Axumite Luxury Dark & Gold Palette -->
+    <color name="colorBackgroundDark">#0B0814</color>
+    <color name="colorSurfaceDark">#120E1F</color>
+    <color name="colorSurfaceCard">#171228</color>
+    
+    <!-- Imperial Gold Accents -->
+    <color name="colorGold">#C5A059</color>
+    <color name="colorGoldLight">#F3E5AB</color>
+    <color name="colorGoldDark">#8E6D28</color>
+    <color name="colorGoldBorder">#4A3710</color>
+    
+    <!-- Status & Semantic Colors -->
+    <color name="colorEmerald">#10B981</color>
+    <color name="colorEmeraldLight">#34D399</color>
+    <color name="colorEmeraldBorder">#064E3B</color>
+    <color name="colorCrimson">#EF4444</color>
+    <color name="colorAmber">#F59E0B</color>
+    
+    <!-- Text Colors -->
+    <color name="colorTextPrimary">#F8FAFC</color>
+    <color name="colorTextSecondary">#94A3B8</color>
+    <color name="colorTextDark">#0A0713</color>
+    
+    <!-- Base Elements -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>

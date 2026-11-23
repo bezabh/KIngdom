@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/splashRootLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorBackgroundDark"
+    android:padding="24dp"
+    tools:context=".SplashActivity">
+
+    <!-- Center Branding & Identity Section -->
+    <LinearLayout
+        android:id="@+id/layoutSplashCenter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <!-- Imperial Axum Obelisk Emblem -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardSplashEmblem"
+            android:layout_width="96dp"
+            android:layout_height="96dp"
+            android:layout_marginBottom="20dp"
+            app:cardBackgroundColor="@color/colorSurfaceCard"
+            app:cardCornerRadius="48dp"
+            app:cardElevation="8dp"
+            app:strokeColor="@color/colorGold"
+            app:strokeWidth="2dp">
+
+            <ImageView
+                android:id="@+id/ivSplashLogo"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_gravity="center"
+                android:contentDescription="@string/app_name"
+                android:src="@drawable/ic_axum_obelisk_gold" />
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Primary App Title (Ge'ez/Tigrinya) -->
+        <TextView
+            android:id="@+id/tvSplashTitleGeez"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="serif"
+            android:text="@string/app_name"
+            android:textColor="@color/colorGold"
+            android:textSize="30sp"
+            android:textStyle="bold" />
+
+        <!-- Subtitle (English) -->
+        <TextView
+            android:id="@+id/tvSplashTitleEn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:letterSpacing="0.15"
+            android:text="@string/app_name_en"
+            android:textAllCaps="true"
+            android:textColor="@color/colorGoldLight"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <!-- Motto / Mission -->
+        <TextView
+            android:id="@+id/tvSplashMotto"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/splash_motto"
+            android:textColor="@color/colorTextSecondary"
+            android:textSize="12sp" />
+
+        <!-- Engine Pill Badge -->
+        <TextView
+            android:id="@+id/tvSplashBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_pill_emerald"
+            android:paddingStart="12dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="4dp"
+            android:text="Pure Java 17 • Target SDK 35 (Android 15)"
+            android:textColor="@color/colorEmeraldLight"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+    <!-- Bottom Loading & Security Footer -->
+    <LinearLayout
+        android:id="@+id/layoutSplashBottom"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="16dp"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <!-- Indeterminate Gold Progress Bar -->
+        <ProgressBar
+            android:id="@+id/pbSplashLoading"
+            style="?android:attr/progressBarStyle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginBottom="12dp"
+            android:indeterminate="true"
+            android:indeterminateTint="@color/colorGold" />
+
+        <!-- Dynamic Startup Status Indicator -->
+        <TextView
+            android:id="@+id/tvSplashStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/splash_loading"
+            android:textColor="@color/colorGoldLight"
+            android:textSize="12sp" />
+
+        <!-- Native Hardware & OS Spec Tag -->
+        <TextView
+            android:id="@+id/tvSplashFooter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fontFamily="monospace"
+            android:text="@string/splash_footer"
+            android:textColor="@color/colorTextSecondary"
+            android:textSize="10sp" />
+
+    </LinearLayout>
+
+</RelativeLayout>
