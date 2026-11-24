@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AppTab } from '../types';
-import { Crown, History, Home, LayoutGrid, Settings } from 'lucide-react';
+import { Crown, Home, LayoutGrid, Settings } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import {
   HapticFeedbackConstants,
@@ -17,13 +17,12 @@ interface BottomNavProps {
   onOpenHistory?: () => void;
 }
 
-type NavButtonKey = 'home' | 'tools' | 'pro' | 'history' | 'settings';
+type NavButtonKey = 'home' | 'tools' | 'pro' | 'settings';
 
 const BottomNavComponent: React.FC<BottomNavProps> = ({
   activeTab,
   setActiveTab,
   onOpenUserModal,
-  onOpenHistory,
 }) => {
   const { language } = useLanguage();
   const [pulsingButton, setPulsingButton] = useState<NavButtonKey | null>(null);
@@ -65,7 +64,6 @@ const BottomNavComponent: React.FC<BottomNavProps> = ({
     ariaLabel: string;
     icon: React.FC<{ className?: string }>;
     isActive: boolean;
-    isProAccent?: boolean;
     onClick: () => void;
     id?: string;
   }> = [
@@ -99,16 +97,7 @@ const BottomNavComponent: React.FC<BottomNavProps> = ({
       ariaLabel: isTigrinya ? 'ኣክሱማይት Pro ክፍሊት' : 'Upgrade to Pro',
       icon: Crown,
       isActive: activeTab === 'payment',
-      isProAccent: true,
       onClick: () => setActiveTab('payment'),
-    },
-    {
-      key: 'history',
-      label: isTigrinya ? 'ታሪኽ' : isGerman ? 'Verlauf' : 'History',
-      ariaLabel: isTigrinya ? 'ታሪኽን ዝተዓቀበን' : 'Activity History',
-      icon: History,
-      isActive: activeTab === 'saved',
-      onClick: () => (onOpenHistory ? onOpenHistory() : setActiveTab('saved')),
     },
     {
       key: 'settings',
@@ -125,13 +114,13 @@ const BottomNavComponent: React.FC<BottomNavProps> = ({
       <div
         className={
           isLightHome
-            ? 'rounded-t-2xl sm:rounded-t-3xl bg-white/92 dark:bg-[#0B1228]/92 border-t border-indigo-100/90 dark:border-indigo-500/20 shadow-[0_-8px_30px_rgba(30,58,138,0.09)] dark:shadow-[0_-10px_30px_rgba(2,6,23,0.55)] backdrop-blur-xl pb-safe transition-colors duration-200'
+            ? 'rounded-t-2xl sm:rounded-t-3xl bg-white/94 dark:bg-[#0B1228]/94 border-t border-indigo-100/80 dark:border-indigo-500/20 shadow-[0_-8px_30px_rgba(30,58,138,0.08)] dark:shadow-[0_-10px_30px_rgba(2,6,23,0.55)] backdrop-blur-xl pb-safe transition-colors duration-200'
             : 'rounded-t-2xl sm:rounded-t-3xl bg-gradient-to-b from-[#0E204B]/95 to-[#081330]/98 border-t border-[#C5A059]/40 shadow-[0_-6px_24px_rgba(8,19,48,0.24)] backdrop-blur-xl pb-safe'
         }
       >
         <nav
           aria-label={isTigrinya ? 'ታሕተዋይ ናይ ዳህሳስ መስመር' : 'Bottom navigation bar'}
-          className="max-w-2xl mx-auto px-2 h-15 sm:h-16 grid grid-cols-5 items-center"
+          className="max-w-2xl mx-auto px-3 h-14 sm:h-15 grid grid-cols-4 items-center"
         >
           {navItems.map((item) => {
             const Icon = item.icon;
@@ -159,13 +148,9 @@ const BottomNavComponent: React.FC<BottomNavProps> = ({
                     isLightHome
                       ? item.isActive
                         ? 'text-[#2563EB] dark:text-sky-400 stroke-[2.3] scale-105'
-                        : item.isProAccent
-                        ? 'text-amber-500 dark:text-amber-400 stroke-[2.1] fill-amber-400/80'
                         : 'text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white stroke-[1.9]'
                       : item.isActive
                       ? 'text-[#F5D880] stroke-[2.2] scale-105'
-                      : item.isProAccent
-                      ? 'text-amber-400 stroke-[2]'
                       : 'text-[#D4AF37]/75 group-hover:text-[#F5D880] stroke-[1.75]'
                   }`}
                 />
@@ -187,8 +172,8 @@ const BottomNavComponent: React.FC<BottomNavProps> = ({
                   className={`mt-1 h-[2.5px] rounded-full transition-all duration-200 ${
                     item.isActive
                       ? isLightHome
-                        ? 'w-7 bg-[#2563EB] dark:bg-sky-400 opacity-100'
-                        : 'w-7 bg-[#F5D880] opacity-100'
+                        ? 'w-8 bg-[#2563EB] dark:bg-sky-400 opacity-100'
+                        : 'w-8 bg-[#F5D880] opacity-100'
                       : 'w-0 opacity-0'
                   }`}
                 />

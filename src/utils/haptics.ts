@@ -236,7 +236,18 @@ export function triggerHapticPattern(
       }
     }
 
-    if (!triggered && typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    const userActivation = (
+      navigator as unknown as { userActivation?: { hasBeenActive?: boolean } }
+    )?.userActivation;
+    const canVibrateSafely =
+      typeof userActivation?.hasBeenActive === 'boolean' ? userActivation.hasBeenActive : true;
+
+    if (
+      !triggered &&
+      canVibrateSafely &&
+      typeof navigator !== 'undefined' &&
+      typeof navigator.vibrate === 'function'
+    ) {
       // Android Chrome & WebView Vibration API returns true when vibration is queued
       const res = navigator.vibrate(scaled);
       triggered = res !== false;

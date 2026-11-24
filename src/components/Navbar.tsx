@@ -167,62 +167,63 @@ const NavbarComponent: React.FC<NavbarProps> = ({
 
   if (isLightHome) {
     return (
-      <header className="sticky top-0 z-40 bg-white/85 dark:bg-[#0B1228]/85 backdrop-blur-xl border-b border-indigo-100/80 dark:border-indigo-500/20 shadow-[0_2px_16px_rgba(30,58,138,0.05)] dark:shadow-[0_4px_20px_rgba(2,6,23,0.45)] transition-colors duration-200">
-        <div className="max-w-6xl mx-auto px-2.5 sm:px-6">
-          <div className="flex items-center justify-between gap-1.5 sm:gap-3 h-14 sm:h-16">
-            {/* Left: Hamburger + Gradient "A" Logo + Brand Name + Short Tagline */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
+      <header className="sticky top-0 z-40 bg-white/75 dark:bg-[#0B1228]/80 backdrop-blur-xl border-b border-indigo-100/60 dark:border-indigo-500/20 transition-colors duration-200">
+        <div className="max-w-5xl mx-auto px-3 sm:px-6">
+          <div className="flex items-center justify-between gap-2 h-13 sm:h-15">
+            {/* Left: Hamburger */}
+            <div className="flex items-center shrink-0">
               {onOpenDrawer && (
                 <button
                   type="button"
                   onClick={onOpenDrawer}
-                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl hover:bg-slate-100/90 dark:hover:bg-slate-800/80 text-slate-800 dark:text-slate-100 transition-colors cursor-pointer flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="w-9 h-9 rounded-xl hover:bg-slate-900/5 dark:hover:bg-white/10 text-slate-800 dark:text-slate-100 transition-colors cursor-pointer flex items-center justify-center shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   title={isTigrinya ? 'ናይ መሳርሒታት ዝርዝር' : 'Open all tools menu'}
                   aria-label={isTigrinya ? 'ናይ መሳርሒታት ዝርዝር ክፈት' : 'Open all tools menu'}
                 >
-                  <Menu className="w-5 h-5 sm:w-5.5 sm:h-5.5 stroke-[2.2]" aria-hidden="true" />
+                  <Menu className="w-5 h-5 stroke-[2.2]" aria-hidden="true" />
                 </button>
               )}
-
-              <button
-                type="button"
-                id="axumite-logo-brand"
-                onClick={() => setActiveTab('premiere')}
-                aria-label="AXUMITE AI Home"
-                aria-current="page"
-                className="flex items-center gap-2 text-left cursor-pointer group min-w-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <GradientMarkA className="w-7.5 h-7.5 sm:w-8.5 sm:h-8.5 shrink-0 group-hover:scale-105 transition-transform" />
-                <div className="min-w-0 leading-tight">
-                  <div className="flex items-baseline gap-1 whitespace-nowrap">
-                    <span className="font-black text-[13px] sm:text-[15px] tracking-tight text-slate-900 dark:text-white">
-                      AXUMITE
-                    </span>
-                    <span className="font-black text-[13px] sm:text-[15px] tracking-tight text-[#2563EB] dark:text-cyan-400">
-                      AI
-                    </span>
-                  </div>
-                  <p className="hidden min-[370px]:block text-[8.5px] sm:text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate font-ethiopic">
-                    {isTigrinya
-                      ? 'ብልሒ · ፍጥነት · ብሓባር'
-                      : isGerman
-                      ? 'Smarter. Schneller. Gemeinsam.'
-                      : 'Smarter. Faster. Together.'}
-                  </p>
-                </div>
-              </button>
             </div>
 
-            {/* Right: Admin (if Admin) + Light/Dark Switch + Notification Bell + Language Selector + Profile Avatar */}
+            {/* Center: Gradient "A" Logo + AXUMITE AI + Concise Tagline */}
+            <button
+              type="button"
+              id="axumite-logo-brand"
+              onClick={() => setActiveTab('premiere')}
+              aria-label="AXUMITE AI Home"
+              aria-current="page"
+              className="flex items-center gap-2 text-left cursor-pointer group min-w-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <GradientMarkA className="w-7.5 h-7.5 sm:w-8.5 sm:h-8.5 shrink-0 group-hover:scale-105 transition-transform" />
+              <div className="min-w-0 leading-tight">
+                <div className="flex items-baseline gap-1 whitespace-nowrap">
+                  <span className="font-black text-[13.5px] sm:text-[16px] tracking-tight text-slate-900 dark:text-white">
+                    AXUMITE
+                  </span>
+                  <span className="font-black text-[13.5px] sm:text-[16px] tracking-tight text-[#2563EB] dark:text-cyan-400">
+                    AI
+                  </span>
+                </div>
+                <p className="hidden min-[350px]:block text-[8.5px] sm:text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate font-ethiopic">
+                  {isTigrinya
+                    ? 'ብልሒ · ፍጥነት · ብሓባር'
+                    : isGerman
+                    ? 'Smarter. Schneller. Gemeinsam.'
+                    : 'Smarter. Faster. Together.'}
+                </p>
+              </div>
+            </button>
+
+            {/* Right: Minimal Utility Icons + Profile Avatar / Sign In */}
             <nav
               aria-label="Primary header controls"
-              className="flex items-center gap-1 sm:gap-2 shrink-0"
+              className="flex items-center gap-1 sm:gap-1.5 shrink-0"
             >
               {isSuperAdmin && (
                 <button
                   type="button"
                   onClick={() => setActiveTab('management')}
-                  className="hidden md:inline-flex items-center gap-1 h-8 px-2.5 rounded-full bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-400/30 hover:border-amber-300 text-amber-800 dark:text-amber-300 text-[10px] sm:text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap"
+                  className="hidden md:inline-flex items-center gap-1 h-7.5 px-2.5 rounded-full bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-400/30 text-amber-800 dark:text-amber-300 text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap"
                   aria-label="Open Super Admin Hub"
                 >
                   <Crown className="w-3 h-3 text-amber-600 dark:text-amber-400" />
@@ -235,23 +236,15 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                   type="button"
                   id="axumite-theme-toggle-btn"
                   onClick={onToggleHomeTheme}
-                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/95 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 shadow-xs text-slate-700 dark:text-amber-300 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center cursor-pointer transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                  title={
-                    homeTheme === 'dark'
-                      ? isTigrinya
-                        ? 'ናብ ብርሃን ቅዲ ቀይር'
-                        : 'Switch to Light Mode'
-                      : isTigrinya
-                      ? 'ናብ ጸሊም ቅዲ ቀይር'
-                      : 'Switch to Dark Mode'
-                  }
+                  className="w-7.5 h-7.5 rounded-full hover:bg-slate-900/5 dark:hover:bg-white/10 text-slate-600 dark:text-amber-300 flex items-center justify-center cursor-pointer transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  title={homeTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
                   aria-label={homeTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
                   aria-pressed={homeTheme === 'dark'}
                 >
                   {homeTheme === 'dark' ? (
-                    <Sun className="w-4 h-4 text-amber-300" aria-hidden="true" />
+                    <Sun className="w-3.5 h-3.5 text-amber-300" aria-hidden="true" />
                   ) : (
-                    <Moon className="w-4 h-4 text-indigo-600" aria-hidden="true" />
+                    <Moon className="w-3.5 h-3.5 text-indigo-600" aria-hidden="true" />
                   )}
                 </button>
               )}
@@ -261,7 +254,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                   type="button"
                   id="axumite-notifications-bell-btn"
                   onClick={onOpenNotifications}
-                  className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/95 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 shadow-xs text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center cursor-pointer transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="relative w-7.5 h-7.5 rounded-full hover:bg-slate-900/5 dark:hover:bg-white/10 text-slate-600 dark:text-slate-200 flex items-center justify-center cursor-pointer transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   title={isTigrinya ? 'መልእኽትታት' : 'Notifications'}
                   aria-label={
                     unreadNotifCount > 0
@@ -269,11 +262,9 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                       : 'Open notifications'
                   }
                 >
-                  <Bell className="w-4 h-4 text-blue-600 dark:text-cyan-400" aria-hidden="true" />
+                  <Bell className="w-3.5 h-3.5 text-slate-700 dark:text-cyan-400" aria-hidden="true" />
                   {unreadNotifCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white flex items-center justify-center tabular-nums shadow-xs">
-                      {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-                    </span>
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500 ring-1 ring-white dark:ring-[#0B1228]" />
                   )}
                 </button>
               )}
@@ -284,17 +275,15 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                   ref={langMenuTriggerRef}
                   type="button"
                   onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
-                  className="flex items-center gap-1 sm:gap-1.5 h-8 sm:h-8.5 px-2 sm:px-2.5 bg-white/95 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 hover:border-blue-300 dark:hover:border-cyan-400/50 shadow-[0_2px_10px_rgba(15,23,42,0.06)] text-slate-800 dark:text-slate-100 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap transition-all cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="flex items-center gap-0.5 h-7.5 px-1.5 sm:px-2 hover:bg-slate-900/5 dark:hover:bg-white/10 text-slate-700 dark:text-slate-100 font-semibold text-[10px] sm:text-[11px] whitespace-nowrap transition-colors cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   title={t.selectLanguage}
-                  aria-label={`Select interface language (${activeLanguageName})`}
+                  aria-label={`Select interface language (${activeLanguageName || activeLanguageLabel})`}
                   aria-expanded={isLangMenuOpen}
                   aria-haspopup="menu"
                   aria-controls="axumite-language-menu"
                 >
-                  <Globe className="w-3 h-3 text-slate-700 dark:text-cyan-400 shrink-0" aria-hidden="true" />
-                  <span className="sm:hidden font-ethiopic">{shortLanguageLabel}</span>
-                  <span className="hidden sm:inline font-ethiopic">{activeLanguageLabel}</span>
-                  <ChevronDown className="w-3 h-3 text-slate-500 dark:text-slate-400 shrink-0" aria-hidden="true" />
+                  <Globe className="w-3.5 h-3.5 text-slate-700 dark:text-cyan-400 shrink-0" aria-hidden="true" />
+                  <span className="hidden sm:inline font-ethiopic ml-0.5">{shortLanguageLabel}</span>
                 </button>
 
                 {isLangMenuOpen && (
@@ -302,13 +291,10 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                     id="axumite-language-menu"
                     role="menu"
                     aria-label={t.selectLanguage || 'Select language'}
-                    className="absolute right-0 mt-2 w-52 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-2 z-50 space-y-1"
+                    className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#0F172A] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-1.5 z-50 space-y-0.5"
                   >
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 px-2.5 py-1 border-b border-slate-100 dark:border-slate-800 font-bold">
-                      {t.selectLanguage}
-                    </div>
                     {[
-                      { code: 'en' as const, label: 'English', sub: 'International English', flag: '🇬🇧' },
+                      { code: 'en' as const, label: 'English', sub: 'International', flag: '🇬🇧' },
                       { code: 'ti' as const, label: 'ትግርኛ', sub: 'Tigrinya', flag: '📜' },
                       { code: 'de' as const, label: 'Deutsch', sub: 'German', flag: '🇩🇪' },
                     ].map((opt) => {
@@ -324,7 +310,7 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                             setLanguage(opt.code);
                             setIsLangMenuOpen(false);
                           }}
-                          className={`w-full flex items-center justify-between px-2.5 py-2 text-xs font-bold rounded-xl transition-colors cursor-pointer ${
+                          className={`w-full flex items-center justify-between px-2.5 py-2 text-[11px] font-bold rounded-xl transition-colors cursor-pointer ${
                             active
                               ? 'bg-blue-50 dark:bg-blue-500/20 text-blue-700 dark:text-sky-300'
                               : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -334,12 +320,12 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                             <span aria-hidden="true">{opt.flag}</span>
                             <span className="text-left">
                               <span className="block font-ethiopic">{opt.label}</span>
-                              <span className="block text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                              <span className="block text-[9.5px] text-slate-500 dark:text-slate-400 font-normal">
                                 {opt.sub}
                               </span>
                             </span>
                           </span>
-                          {active && <Check className="w-4 h-4 text-blue-600 dark:text-sky-400" />}
+                          {active && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-sky-400" />}
                         </button>
                       );
                     })}
@@ -347,17 +333,17 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                 )}
               </div>
 
-              {/* Circular Avatar with Online/Offline Status OR Compact Sign-In CTA */}
+              {/* Circular Avatar with Online Dot (or Sign-In trigger) */}
               {isSignedInAccount ? (
                 <button
                   type="button"
                   id="axumite-nav-account-btn"
                   onClick={onOpenUserModal}
-                  className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-full p-0.5 bg-gradient-to-tr from-blue-500 via-indigo-500 to-purple-500 shadow-sm cursor-pointer shrink-0 hover:scale-105 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  className="relative w-8.5 h-8.5 sm:w-9 sm:h-9 rounded-full p-0.5 bg-gradient-to-tr from-blue-500 via-indigo-500 to-purple-500 shadow-xs cursor-pointer shrink-0 hover:scale-105 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   title={`${user.email} · ${isOffline ? 'Offline' : 'Online'}`}
                   aria-label={`Account profile (${user.name || user.email}, ${isOffline ? 'offline' : 'online'})`}
                 >
-                  <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 flex items-center justify-center text-white text-xs font-bold">
+                  <div className="w-full h-full rounded-full overflow-hidden bg-slate-900 flex items-center justify-center text-white text-[10px] font-bold">
                     {user.avatar ? (
                       <img
                         src={user.avatar}
@@ -382,11 +368,15 @@ const NavbarComponent: React.FC<NavbarProps> = ({
                     type="button"
                     id="axumite-nav-signin-btn"
                     onClick={() => onOpenAuthModal('login')}
-                    className="flex items-center gap-1 h-8 sm:h-8.5 px-2.5 sm:px-3 rounded-full bg-gradient-to-r from-[#2563EB] to-[#4F46E5] hover:brightness-105 text-white text-[10px] sm:text-[11px] font-bold whitespace-nowrap shadow-sm cursor-pointer active:scale-95 transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="relative flex items-center gap-1 h-8 px-2.5 rounded-full bg-gradient-to-r from-[#2563EB] to-[#4F46E5] hover:brightness-105 text-white text-[10px] sm:text-[11px] font-bold whitespace-nowrap shadow-xs cursor-pointer active:scale-95 transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                     aria-label={isTigrinya ? 'ናብ ኣክሱማይት AI እቶ' : 'Sign in to Axumite AI'}
                   >
                     <LogIn className="w-3 h-3 shrink-0" aria-hidden="true" />
                     <span>{isTigrinya ? 'እቶ' : isGerman ? 'Login' : 'Sign In'}</span>
+                    <span
+                      aria-hidden="true"
+                      className={`w-1.5 h-1.5 rounded-full ${isOffline ? 'bg-amber-300' : 'bg-emerald-300'}`}
+                    />
                   </button>
                 )
               )}

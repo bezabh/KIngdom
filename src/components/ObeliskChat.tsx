@@ -58,7 +58,7 @@ Ask any question in Tigrinya or English:
     },
   ]);
 
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(() => (initialPrompt?.trim() ? initialPrompt : ''));
   const [mode, setMode] = useState<QueryMode>('general');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
@@ -118,12 +118,13 @@ Ask any question in Tigrinya or English:
   };
 
   useEffect(() => {
-    if (initialPrompt && initialPrompt.trim()) {
-      setInput(initialPrompt);
-      if (onPromptConsumed) {
-        onPromptConsumed();
-      }
-    }
+    if (!initialPrompt || !initialPrompt.trim()) return;
+    setInput(initialPrompt);
+    if (!onPromptConsumed) return;
+    const timer = window.setTimeout(() => {
+      onPromptConsumed();
+    }, 600);
+    return () => window.clearTimeout(timer);
   }, [initialPrompt, onPromptConsumed]);
 
   const toggleListening = () => {
