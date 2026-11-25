@@ -56,10 +56,35 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>
 );
 
-if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+const isPreviewOrEmbeddedHost =
+  typeof window !== 'undefined' &&
+  (window.self !== window.top ||
+    window.location.hostname.startsWith('ais-dev-') ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1');
+
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.log('SW registration skipped or failed:', err);
-    });
+    if (isPreviewOrEmbeddedHost) {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) =>
+          Promise.all(registrations.map((registration) => registration.unregister()))
+        )
+        .catch(() => {});
+      if ('caches' in window) {
+        caches
+          .keys()
+          .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
+          .catch(() => {});
+      }
+      return;
+    }
+
+    if (window.location.protocol === 'https:') {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.log('SW registration skipped or failed:', err);
+      });
+    }
   });
 }

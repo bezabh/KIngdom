@@ -92,8 +92,16 @@ fun AxumiteNavHost(
     }
 
     LaunchedEffect(Unit) {
-        if (!isPreview && AdMobInitializer.awaitInitialization()) {
-            loadInterstitialIfNeeded()
+        if (!isPreview) {
+            try {
+                if (AdMobInitializer.awaitInitialization()) {
+                    loadInterstitialIfNeeded()
+                }
+            } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                Log.w("AxumiteInterstitial", "Initialization wait failed", t)
+            }
         }
     }
 
@@ -135,8 +143,14 @@ fun AxumiteNavHost(
                     override fun onAdDismissedFullScreenContent() {
                         Log.d("AxumiteInterstitial", "Interstitial ad dismissed.")
                         coroutineScope.launch {
-                            if (AdMobInitializer.awaitInitialization()) {
-                                loadInterstitialIfNeeded()
+                            try {
+                                if (AdMobInitializer.awaitInitialization()) {
+                                    loadInterstitialIfNeeded()
+                                }
+                            } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+                                throw ce
+                            } catch (t: Throwable) {
+                                Log.w("AxumiteInterstitial", "Reload after dismiss failed", t)
                             }
                         }
                     }

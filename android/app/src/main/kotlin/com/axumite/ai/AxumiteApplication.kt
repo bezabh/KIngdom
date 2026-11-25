@@ -7,15 +7,13 @@ import com.onesignal.debug.LogLevel
 
 class AxumiteApplication : Application() {
 
-    private val adMobInitializer by lazy { AdMobInitializer() }
-
     override fun onCreate() {
         super.onCreate()
         instance = this
         Log.i(TAG, "Axumite AI Sovereign Android App (Kotlin 2.0 / Jetpack Compose) initialized.")
 
         initOneSignal()
-        adMobInitializer.initialize(this)
+        AdMobInitializer.initialize(this)
     }
 
     private fun initOneSignal() {

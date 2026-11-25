@@ -237,14 +237,26 @@ private fun HomeBannerAd(modifier: Modifier = Modifier) {
 
     val adWidthDp = LocalConfiguration.current.screenWidthDp.coerceAtLeast(320)
     val hostContext = remember(context) { context.findActivity() ?: context }
-    val adView = remember(hostContext) { AdView(hostContext) }
+    val adView = remember(hostContext) {
+        try {
+            AdView(hostContext)
+        } catch (t: Throwable) {
+            Log.w("AxumiteBanner", "Unable to instantiate AdView; skipping banner ad.", t)
+            null
+        }
+    }
+    if (adView == null) return
+
     var isAdLoaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(adView, adWidthDp) {
-        val initialized = AdMobInitializer.awaitInitialization()
-        if (!initialized) return@LaunchedEffect
-
         try {
+            val initialized = AdMobInitializer.awaitInitialization()
+            if (!initialized) {
+                isAdLoaded = false
+                return@LaunchedEffect
+            }
+
             val adSize = AdSize.getLargeAnchoredAdaptiveBannerAdSize(hostContext, adWidthDp)
             val adRequest = BannerAdRequest.Builder(HOME_BANNER_AD_UNIT_ID, adSize).build()
             adView.loadAd(
@@ -261,6 +273,8 @@ private fun HomeBannerAd(modifier: Modifier = Modifier) {
                     }
                 }
             )
+        } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+            throw ce
         } catch (t: Throwable) {
             isAdLoaded = false
             Log.w("AxumiteBanner", "Failed to load banner ad", t)

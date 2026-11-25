@@ -13,16 +13,21 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Dedicated initializer for the Google Mobile Ads (GMA) Next-Gen SDK.
- * Initializes MobileAds asynchronously on a background thread using the
- * programmatic InitializationConfig API and sample App ID.
+ * Singleton initializer for the Google Mobile Ads (GMA) Next-Gen SDK.
+ * Invoked once during [AxumiteApplication.onCreate] so initialization runs
+ * strictly once and on a background thread using the programmatic InitializationConfig API.
  */
-class AdMobInitializer(
-    private val backgroundScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-) {
+object AdMobInitializer {
+
+    private const val TAG = "AdMobInitializer"
+    const val ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713"
+
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val isInitCalled = AtomicBoolean(false)
+    private val initDeferred = CompletableDeferred<Boolean>()
 
     fun initialize(context: Context) {
-        if (isInitCalled.getAndSet(true)) return
+        if (!isInitCalled.compareAndSet(false, true)) return
 
         val appContext = context.applicationContext ?: context
         backgroundScope.launch(Dispatchers.IO) {
@@ -43,20 +48,10 @@ class AdMobInitializer(
         }
     }
 
-    suspend fun awaitInitialized(): Boolean = awaitInitialization()
-
-    companion object {
-        private const val TAG = "AdMobInitializer"
-        const val ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713"
-
-        private val isInitCalled = AtomicBoolean(false)
-        private val initDeferred = CompletableDeferred<Boolean>()
-
-        suspend fun awaitInitialization(): Boolean {
-            if (!isInitCalled.get()) return false
-            return withTimeoutOrNull(15_000L) {
-                initDeferred.await()
-            } ?: false
-        }
+    suspend fun awaitInitialization(): Boolean {
+        if (!isInitCalled.get()) return false
+        return withTimeoutOrNull(15_000L) {
+            initDeferred.await()
+        } ?: false
     }
 }

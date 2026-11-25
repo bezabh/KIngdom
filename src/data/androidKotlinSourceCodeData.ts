@@ -14,21 +14,15 @@ export const KOTLIN_ANDROID_PROJECT_FILES: AndroidKotlinFileRecord[] = [
     name: 'AxumiteApplication.kt',
     category: 'kotlin',
     language: 'kotlin',
-    description: 'Kotlin Application entry point with OneSignal v5 initialization, Room DB setup, and Ge\'ez OCR model preloading.',
+    description: 'Kotlin Application entry point initializing OneSignal v5 and GMA Next-Gen AdMobInitializer once in onCreate().',
     content: `package com.axumite.ai
 
 import android.app.Application
 import android.util.Log
 import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 class AxumiteApplication : Application() {
-
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
@@ -36,6 +30,7 @@ class AxumiteApplication : Application() {
         Log.i(TAG, "Axumite AI Sovereign Android App (Kotlin 2.0 / Jetpack Compose) initialized.")
 
         initOneSignal()
+        AdMobInitializer.initialize(this)
     }
 
     private fun initOneSignal() {
@@ -63,6 +58,67 @@ class AxumiteApplication : Application() {
         const val ONESIGNAL_APP_ID = "122b150b-1b50-4200-b515-7da4ed438c4e"
         lateinit var instance: AxumiteApplication
             private set
+    }
+}`
+  },
+
+  // 1b. GMA Next-Gen Singleton Initializer
+  {
+    path: 'app/src/main/kotlin/com/axumite/ai/AdMobInitializer.kt',
+    name: 'AdMobInitializer.kt',
+    category: 'kotlin',
+    language: 'kotlin',
+    description: 'Thread-safe singleton initializing Google Mobile Ads Next-Gen SDK once on Dispatchers.IO during Application.onCreate().',
+    content: `package com.axumite.ai
+
+import android.content.Context
+import android.util.Log
+import com.google.android.libraries.ads.mobile.sdk.MobileAds
+import com.google.android.libraries.ads.mobile.sdk.initialization.InitializationConfig
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
+
+object AdMobInitializer {
+
+    private const val TAG = "AdMobInitializer"
+    const val ADMOB_APP_ID = "ca-app-pub-3940256099942544~3347511713"
+
+    private val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val isInitCalled = AtomicBoolean(false)
+    private val initDeferred = CompletableDeferred<Boolean>()
+
+    fun initialize(context: Context) {
+        if (!isInitCalled.compareAndSet(false, true)) return
+
+        val appContext = context.applicationContext ?: context
+        backgroundScope.launch(Dispatchers.IO) {
+            try {
+                val initConfig = InitializationConfig.Builder(ADMOB_APP_ID).build()
+                MobileAds.initialize(appContext, initConfig) { initializationStatus ->
+                    Log.i(TAG, "GMA Next-Gen MobileAds initialized: $initializationStatus")
+                    if (!initDeferred.isCompleted) {
+                        initDeferred.complete(true)
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to initialize GMA Next-Gen MobileAds SDK", t)
+                if (!initDeferred.isCompleted) {
+                    initDeferred.complete(false)
+                }
+            }
+        }
+    }
+
+    suspend fun awaitInitialization(): Boolean {
+        if (!isInitCalled.get()) return false
+        return withTimeoutOrNull(15_000L) {
+            initDeferred.await()
+        } ?: false
     }
 }`
   },
@@ -113,15 +169,33 @@ class MainActivity : ComponentActivity() {
     name: 'AxumiteNavHost.kt',
     category: 'compose',
     language: 'kotlin',
-    description: 'Declarative navigation graph connecting Home, Chat, Camera OCR, Telebirr, Dictionary, and Voice Assistant screens.',
+    description: 'Declarative navigation graph connecting Home, Chat, Camera OCR, Telebirr, Dictionary, and Voice Assistant screens with GMA Next-Gen interstitial ads.',
     content: `package com.axumite.ai.ui.navigation
 
-import androidx.compose.runtime.Composable
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.util.Log
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.axumite.ai.AdMobInitializer
 import com.axumite.ai.ui.screens.*
+import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
+import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
+import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd
+import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdEventCallback
+import kotlinx.coroutines.launch
+
+private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+private const val INTERSTITIAL_COOLDOWN_MS = 60_000L
 
 sealed class Screen(val route: String, val titleTi: String, val titleEn: String) {
     data object Home : Screen("home", "ዋና ገጽ", "Home")
@@ -139,6 +213,104 @@ fun AxumiteNavHost(
     modifier: Modifier = Modifier,
     startDestination: String = Screen.Home.route
 ) {
+    val context = LocalContext.current
+    val isPreview = LocalInspectionMode.current
+    val coroutineScope = rememberCoroutineScope()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    var lastRoute by remember { mutableStateOf<String?>(null) }
+
+    var interstitialAd by remember { mutableStateOf<InterstitialAd?>(null) }
+    var isLoadingInterstitial by remember { mutableStateOf(false) }
+    var lastInterstitialShownAtMs by remember { mutableLongStateOf(0L) }
+
+    fun loadInterstitialIfNeeded() {
+        if (isPreview || interstitialAd != null || isLoadingInterstitial) return
+        isLoadingInterstitial = true
+        try {
+            InterstitialAd.load(
+                AdRequest.Builder(INTERSTITIAL_AD_UNIT_ID).build(),
+                object : AdLoadCallback<InterstitialAd> {
+                    override fun onAdLoaded(ad: InterstitialAd) {
+                        isLoadingInterstitial = false
+                        interstitialAd = ad
+                    }
+
+                    override fun onAdFailedToLoad(adError: LoadAdError) {
+                        isLoadingInterstitial = false
+                        interstitialAd = null
+                        Log.w("AxumiteInterstitial", "Interstitial ad failed to load: \${adError.message}")
+                    }
+                }
+            )
+        } catch (t: Throwable) {
+            isLoadingInterstitial = false
+            interstitialAd = null
+            Log.w("AxumiteInterstitial", "Unable to request interstitial ad", t)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!isPreview) {
+            try {
+                if (AdMobInitializer.awaitInitialization()) {
+                    loadInterstitialIfNeeded()
+                }
+            } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+                throw ce
+            } catch (t: Throwable) {
+                Log.w("AxumiteInterstitial", "Initialization wait failed", t)
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            interstitialAd?.adEventCallback = null
+            interstitialAd = null
+        }
+    }
+
+    LaunchedEffect(navBackStackEntry?.destination?.route) {
+        val currentRoute = navBackStackEntry?.destination?.route
+        val previousRoute = lastRoute
+        if (previousRoute != null && currentRoute != null && previousRoute != currentRoute) {
+            val isNaturalReturnToHome = currentRoute == Screen.Home.route
+            val now = System.currentTimeMillis()
+            val cooldownElapsed = now - lastInterstitialShownAtMs >= INTERSTITIAL_COOLDOWN_MS
+            val adToShow = interstitialAd
+            val activity = context.findActivity()
+
+            if (isNaturalReturnToHome && cooldownElapsed && adToShow != null && activity != null && !activity.isFinishing && !activity.isDestroyed) {
+                interstitialAd = null
+                adToShow.adEventCallback = object : InterstitialAdEventCallback {
+                    override fun onAdShowedFullScreenContent() {
+                        lastInterstitialShownAtMs = System.currentTimeMillis()
+                    }
+
+                    override fun onAdDismissedFullScreenContent() {
+                        coroutineScope.launch {
+                            try {
+                                if (AdMobInitializer.awaitInitialization()) {
+                                    loadInterstitialIfNeeded()
+                                }
+                            } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+                                throw ce
+                            } catch (t: Throwable) {
+                                Log.w("AxumiteInterstitial", "Reload after dismiss failed", t)
+                            }
+                        }
+                    }
+
+                    override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
+                        Log.w("AxumiteInterstitial", "Interstitial ad failed to show: \${fullScreenContentError.message}")
+                    }
+                }
+                runCatching { adToShow.show(activity) }
+            }
+        }
+        lastRoute = currentRoute
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -166,6 +338,12 @@ fun AxumiteNavHost(
             DiagnosticsScreen(navController = navController)
         }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }`
   },
 
@@ -706,9 +884,13 @@ fun AxumiteCustomBiometricPrompt(
     name: 'HomeScreen.kt',
     category: 'compose',
     language: 'kotlin',
-    description: 'Jetpack Compose Home Dashboard with Gold Axumite luxury design, quick tools, and real-time status.',
+    description: 'Jetpack Compose Home Dashboard with Gold Axumite luxury design, quick tools, and non-blocking GMA Next-Gen Banner Ad.',
     content: `package com.axumite.ai.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -717,21 +899,34 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
+import com.axumite.ai.AdMobInitializer
 import com.axumite.ai.ui.navigation.Screen
 import com.axumite.ai.ui.theme.GoldPrimary
 import com.axumite.ai.ui.theme.GoldSecondary
 import com.axumite.ai.ui.theme.RoyalDarkSurface
+import com.google.android.libraries.ads.mobile.sdk.banner.AdSize
+import com.google.android.libraries.ads.mobile.sdk.banner.AdView
+import com.google.android.libraries.ads.mobile.sdk.banner.BannerAd
+import com.google.android.libraries.ads.mobile.sdk.banner.BannerAdRequest
+import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+
+private const val HOME_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/9214589741"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -761,6 +956,9 @@ fun HomeScreen(navController: NavController) {
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RoyalDarkSurface)
             )
+        },
+        bottomBar = {
+            HomeBannerAd()
         }
     ) { paddingValues ->
         LazyColumn(
@@ -911,6 +1109,91 @@ fun FeatureGridCard(
             }
         }
     }
+}
+
+@Composable
+private fun HomeBannerAd(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    if (LocalInspectionMode.current) return
+
+    val adWidthDp = LocalConfiguration.current.screenWidthDp.coerceAtLeast(320)
+    val hostContext = remember(context) { context.findActivity() ?: context }
+    val adView = remember(hostContext) {
+        try {
+            AdView(hostContext)
+        } catch (t: Throwable) {
+            Log.w("AxumiteBanner", "Unable to instantiate AdView; skipping banner ad.", t)
+            null
+        }
+    }
+    if (adView == null) return
+
+    var isAdLoaded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(adView, adWidthDp) {
+        try {
+            val initialized = AdMobInitializer.awaitInitialization()
+            if (!initialized) {
+                isAdLoaded = false
+                return@LaunchedEffect
+            }
+
+            val adSize = AdSize.getLargeAnchoredAdaptiveBannerAdSize(hostContext, adWidthDp)
+            val adRequest = BannerAdRequest.Builder(HOME_BANNER_AD_UNIT_ID, adSize).build()
+            adView.loadAd(
+                adRequest,
+                object : AdLoadCallback<BannerAd> {
+                    override fun onAdLoaded(ad: BannerAd) {
+                        adView.post { isAdLoaded = true }
+                        Log.d("AxumiteBanner", "Banner ad loaded.")
+                    }
+
+                    override fun onAdFailedToLoad(adError: LoadAdError) {
+                        adView.post { isAdLoaded = false }
+                        Log.w("AxumiteBanner", "Banner ad failed to load: \${adError.message}")
+                    }
+                }
+            )
+        } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
+            throw ce
+        } catch (t: Throwable) {
+            isAdLoaded = false
+            Log.w("AxumiteBanner", "Failed to load banner ad", t)
+        }
+    }
+
+    DisposableEffect(adView) {
+        onDispose {
+            runCatching { adView.destroy() }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (isAdLoaded) {
+                    Modifier
+                        .background(RoyalDarkSurface)
+                        .navigationBarsPadding()
+                        .padding(top = 4.dp)
+                } else {
+                    Modifier
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        AndroidView(
+            modifier = Modifier.wrapContentSize(),
+            factory = { adView }
+        )
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }`
   },
 
@@ -1558,6 +1841,11 @@ fun AxumiteTheme(content: @Composable () -> Unit) {
             </intent-filter>
         </activity>
 
+        <!-- Sample AdMob App ID (GMA Next-Gen SDK) -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
     </application>
 </manifest>`
   },
@@ -1634,6 +1922,10 @@ dependencies {
 
     // OneSignal Push Notifications
     implementation(libs.onesignal)
+
+    // Google Mobile Ads (GMA Next-Gen SDK) & Coroutines
+    implementation("com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.7.0")
+    implementation(libs.kotlinx.coroutines.android)
 
     // Unit Testing (JUnit 4, MockK, Coroutines Test)
     testImplementation(libs.junit)
