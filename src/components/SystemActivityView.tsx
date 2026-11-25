@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { useBatterySaver } from '../context/BatterySaverContext';
 import { isAdminOrCreator } from '../lib/permissions';
 import { exportSystemLogsToCSV, exportSystemLogsToPDF } from '../utils/adminDataExport';
 
@@ -357,6 +358,7 @@ export const SystemActivityView: React.FC<SystemActivityViewProps> = ({
   currentUser,
 }) => {
   const { language } = useLanguage();
+  const { isPowerSavingActive } = useBatterySaver();
 
   const [timeframe, setTimeframe] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('all');
@@ -389,7 +391,7 @@ export const SystemActivityView: React.FC<SystemActivityViewProps> = ({
 
   // Live periodic simulation heartbeat for Super Admin monitoring
   useEffect(() => {
-    if (!isLiveStreamActive) return;
+    if (!isLiveStreamActive || isPowerSavingActive) return;
 
     const interval = setInterval(() => {
       setLiveSessions((prev) => {
@@ -412,7 +414,7 @@ export const SystemActivityView: React.FC<SystemActivityViewProps> = ({
     }, 4000);
 
     return () => clearInterval(interval);
-  }, [isLiveStreamActive]);
+  }, [isLiveStreamActive, isPowerSavingActive]);
 
   // Session stats summaries
   const sessionStats = useMemo(() => {

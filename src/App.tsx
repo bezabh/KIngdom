@@ -1,6 +1,14 @@
-import React, { useState, useRef, useCallback, Suspense } from 'react';
+import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react';
 import { AppTab } from './types';
-import { motion, AnimatePresence } from 'motion/react';
+import {
+  motion,
+  MotionConfig,
+  AnimatePresence,
+  animate,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from 'motion/react';
 import { Hand, ChevronLeft, ChevronRight, Smartphone } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
@@ -9,6 +17,8 @@ import { OfflineDashboardPrefetcher, OfflineModeHost } from './components/Offlin
 import { AppModalsHost } from './components/AppModalsHost';
 import { AppVoiceCommandHost } from './components/AppVoiceCommandHost';
 import { useAuthUser } from './context/AuthUserContext';
+import { useAdaptiveTheme } from './context/AdaptiveThemeContext';
+import { useBatterySaver } from './context/BatterySaverContext';
 import { useNetwork } from './context/NetworkContext';
 import { useSubscription } from './context/SubscriptionContext';
 import {
@@ -20,10 +30,21 @@ import { useNotificationUnreadCount } from './context/NotificationContext';
 import { useAppActions, useNavigationState } from './context/AppNavigationContext';
 import { useIsAlwaysListening, useVoiceCommandActions } from './context/VoiceCommandContext';
 import {
+  HAPTICS_SETTINGS_EVENT,
+  HapticSettings,
+  getSwipeThresholdPx,
   triggerSwipeThresholdHaptic,
   triggerSwipeTransitionHaptic,
   triggerTabTapHaptic,
 } from './utils/haptics';
+import {
+  SWIPE_PAUSE_DECAY_MS,
+  SwipeGestureAxis,
+  computeDampedDragX,
+  computeSwipeSnapDecision,
+} from './utils/swipePhysics';
+import { recordSwipeAttempt } from './utils/interactionMetrics';
+import { recordTapHeatmapPointFromEvent } from './utils/heatmapTracker';
 import logoImg from './assets/images/axumite_3d_luxury_logo_1787505687476.jpg';
 
 // Lazy-loaded tab views & non-critical first-session helper
@@ -452,15 +473,59 @@ export default function App() {
   const actions = useAppActions();
   const { isOffline, isOfflineDashboardMinimized } = useNetwork();
 
-  // Touch Gesture Swipe Navigation State & Handlers
+  const prefersReducedMotion = useReducedMotion();
+  const { isPowerSavingActive } = useBatterySaver();
+  const { activeAesthetic } = useAdaptiveTheme();
+  const isGoldAmbient = activeAesthetic === 'gold-ambient';
+  const reduceAnimations = Boolean(prefersReducedMotion || isPowerSavingActive);
+
+  // Touch Gesture Swipe Navigation State & Physics Handlers
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const touchStartTime = useRef<number>(0);
+  const lastMoveXRef = useRef<number>(0);
+  const lastMoveTimeRef = useRef<number>(0);
+  const velocityXRef = useRef<number>(0); // px/s
+  const gestureAxisRef = useRef<SwipeGestureAxis>('pending');
   const swipeThresholdFiredRef = useRef<boolean>(false);
+  const swipeThresholdPxRef = useRef<number>(getSwipeThresholdPx());
+
+  // Live motion value driving interactive horizontal follow & spring snap-back
+  const dragX = useMotionValue(0);
+  const dragScale = useTransform(dragX, [-160, 0, 160], [0.988, 1, 0.988]);
+  const dragOpacity = useTransform(dragX, [-180, 0, 180], [0.9, 1, 0.9]);
+
+  const activeTabRef = useRef<AppTab>(activeTab);
+  activeTabRef.current = activeTab;
+
+  useEffect(() => {
+    const onHapticsUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<HapticSettings>).detail;
+      swipeThresholdPxRef.current = detail?.swipeThresholdPx ?? getSwipeThresholdPx();
+    };
+    window.addEventListener(HAPTICS_SETTINGS_EVENT, onHapticsUpdated);
+    return () => window.removeEventListener(HAPTICS_SETTINGS_EVENT, onHapticsUpdated);
+  }, []);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      recordTapHeatmapPointFromEvent(event, activeTabRef.current);
+    };
+    document.addEventListener('pointerdown', handlePointerDown, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, { capture: true });
+    };
+  }, []);
+
   const [swipeNotice, setSwipeNotice] = useState<{
     label: string;
     icon: 'left' | 'right';
     hapticFired?: boolean;
+  } | null>(null);
+  const [dragPreview, setDragPreview] = useState<{
+    label: string;
+    direction: 'left' | 'right';
+    willCommit: boolean;
   } | null>(null);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right'>('left');
 
@@ -472,98 +537,270 @@ export default function App() {
     []
   );
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('input, textarea, select, button, [role="button"], [data-no-swipe]')) {
-      touchStartX.current = null;
-      touchStartY.current = null;
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('input, textarea, select, button, [role="button"], [data-no-swipe]')) {
+        touchStartX.current = null;
+        touchStartY.current = null;
+        gestureAxisRef.current = 'pending';
+        swipeThresholdFiredRef.current = false;
+        return;
+      }
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      const now = Date.now();
+      dragX.stop();
+      touchStartX.current = x;
+      touchStartY.current = y;
+      touchStartTime.current = now;
+      lastMoveXRef.current = x;
+      lastMoveTimeRef.current = now;
+      velocityXRef.current = 0;
+      gestureAxisRef.current = 'pending';
       swipeThresholdFiredRef.current = false;
-      return;
-    }
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    touchStartTime.current = Date.now();
-    swipeThresholdFiredRef.current = false;
-  }, []);
+      setDragPreview(null);
+    },
+    [dragX]
+  );
 
   const handleTouchMove = useCallback(
     (e: React.TouchEvent) => {
-      if (touchStartX.current === null || touchStartY.current === null || swipeThresholdFiredRef.current) {
+      if (touchStartX.current === null || touchStartY.current === null) {
         return;
       }
-      const deltaX = e.touches[0].clientX - touchStartX.current;
-      const deltaY = e.touches[0].clientY - touchStartY.current;
-      if (Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
-        const currentIndex = MAIN_TABS.findIndex((t) => t.id === activeTab);
-        if (currentIndex !== -1) {
-          swipeThresholdFiredRef.current = true;
-          triggerSwipeThresholdHaptic();
+
+      const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
+      const deltaX = currentX - touchStartX.current;
+      const deltaY = currentY - touchStartY.current;
+      const now = Date.now();
+
+      // Determine gesture axis lock cleanly so vertical scrolling stays 100% crisp
+      if (gestureAxisRef.current === 'pending') {
+        if (Math.abs(deltaY) > 10 && Math.abs(deltaY) > Math.abs(deltaX)) {
+          gestureAxisRef.current = 'vertical';
+          return;
+        }
+        if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 1.15) {
+          const currentIndex = MAIN_TABS.findIndex((t) => t.id === activeTab);
+          if (currentIndex === -1) {
+            gestureAxisRef.current = 'vertical';
+            return;
+          }
+          gestureAxisRef.current = 'horizontal';
+        } else {
+          return;
         }
       }
+
+      if (gestureAxisRef.current !== 'horizontal') {
+        return;
+      }
+
+      // Compute smoothed instantaneous velocity (px/s)
+      const dt = now - lastMoveTimeRef.current;
+      if (dt > 0) {
+        const instantVelocity = ((currentX - lastMoveXRef.current) / dt) * 1000;
+        velocityXRef.current = velocityXRef.current * 0.35 + instantVelocity * 0.65;
+        lastMoveXRef.current = currentX;
+        lastMoveTimeRef.current = now;
+      }
+
+      const thresholdPx = swipeThresholdPxRef.current;
+      if (!reduceAnimations) {
+        dragX.set(computeDampedDragX(deltaX, thresholdPx));
+      }
+
+      const currentIndex = MAIN_TABS.findIndex((t) => t.id === activeTab);
+      if (currentIndex !== -1 && Math.abs(deltaX) > 18) {
+        const direction: 'left' | 'right' = deltaX < 0 ? 'left' : 'right';
+        const targetTab =
+          direction === 'left'
+            ? MAIN_TABS[(currentIndex + 1) % MAIN_TABS.length]
+            : MAIN_TABS[(currentIndex - 1 + MAIN_TABS.length) % MAIN_TABS.length];
+        const willCommit = Math.abs(deltaX) >= thresholdPx;
+
+        setDragPreview((prev) =>
+          prev &&
+          prev.label === targetTab.labelEn &&
+          prev.direction === direction &&
+          prev.willCommit === willCommit
+            ? prev
+            : { label: targetTab.labelEn, direction, willCommit }
+        );
+      } else {
+        setDragPreview(null);
+      }
+
+      if (!swipeThresholdFiredRef.current && Math.abs(deltaX) >= thresholdPx) {
+        swipeThresholdFiredRef.current = true;
+        triggerSwipeThresholdHaptic();
+      } else if (swipeThresholdFiredRef.current && Math.abs(deltaX) < thresholdPx * 0.75) {
+        swipeThresholdFiredRef.current = false;
+      }
     },
-    [activeTab]
+    [activeTab, dragX, reduceAnimations]
   );
+
+  const springSnapBack = useCallback(
+    (releaseVelocity: number) => {
+      if (reduceAnimations) {
+        dragX.set(0);
+        return;
+      }
+      animate(dragX, 0, {
+        type: 'spring',
+        stiffness: 460,
+        damping: 34,
+        mass: 0.8,
+        velocity: releaseVelocity,
+      });
+    },
+    [dragX, reduceAnimations]
+  );
+
+  const handleTouchCancel = useCallback(() => {
+    touchStartX.current = null;
+    touchStartY.current = null;
+    gestureAxisRef.current = 'pending';
+    swipeThresholdFiredRef.current = false;
+    setDragPreview(null);
+    springSnapBack(0);
+  }, [springSnapBack]);
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
       if (touchStartX.current === null || touchStartY.current === null) return;
 
-      const deltaX = e.changedTouches[0].clientX - touchStartX.current;
-      const deltaY = e.changedTouches[0].clientY - touchStartY.current;
-      const duration = Date.now() - touchStartTime.current;
+      const endX = e.changedTouches[0].clientX;
+      const deltaX = endX - touchStartX.current;
+      const now = Date.now();
+      const axis = gestureAxisRef.current;
+      const thresholdPx = swipeThresholdPxRef.current;
+
+      // Decay velocity to 0 if the user paused mid-way before lifting their finger
+      const msSinceLastMove = now - lastMoveTimeRef.current;
+      const releaseVelocity =
+        msSinceLastMove > SWIPE_PAUSE_DECAY_MS ? 0 : velocityXRef.current;
 
       touchStartX.current = null;
       touchStartY.current = null;
+      gestureAxisRef.current = 'pending';
       swipeThresholdFiredRef.current = false;
+      setDragPreview(null);
 
-      if (duration < 500 && Math.abs(deltaX) > 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.3) {
-        const currentIndex = MAIN_TABS.findIndex((t) => t.id === activeTab);
-        if (currentIndex === -1) return;
+      const decision = computeSwipeSnapDecision({
+        deltaX,
+        velocityX: releaseVelocity,
+        thresholdPx,
+        axis,
+      });
 
-        if (deltaX < 0) {
-          const nextIndex = (currentIndex + 1) % MAIN_TABS.length;
-          const nextTab = MAIN_TABS[nextIndex];
-          setSwipeDirection('left');
-          actions.navigateTab(nextTab.id);
-          const hapticFired = triggerSwipeTransitionHaptic('left');
-          triggerSwipeNotice(nextTab.labelTi, 'right', hapticFired);
-        } else {
-          const prevIndex = (currentIndex - 1 + MAIN_TABS.length) % MAIN_TABS.length;
-          const prevTab = MAIN_TABS[prevIndex];
-          setSwipeDirection('right');
-          actions.navigateTab(prevTab.id);
-          const hapticFired = triggerSwipeTransitionHaptic('right');
-          triggerSwipeNotice(prevTab.labelTi, 'left', hapticFired);
+      const currentIndex = MAIN_TABS.findIndex((t) => t.id === activeTab);
+      if (!decision.shouldTransition || currentIndex === -1) {
+        if (axis === 'horizontal' && Math.abs(deltaX) >= 12) {
+          recordSwipeAttempt({
+            fromTab: activeTab,
+            distancePx: Math.abs(deltaX),
+            velocityPxS: Math.abs(releaseVelocity),
+            thresholdPx,
+            succeeded: false,
+            direction: decision.direction,
+          });
         }
+        // Snap cleanly back to the current tab with spring physics
+        springSnapBack(releaseVelocity);
+        return;
+      }
+
+      // Snap forward cleanly into the next or previous tab
+      dragX.set(0);
+      if (decision.direction === 'left') {
+        const nextIndex = (currentIndex + 1) % MAIN_TABS.length;
+        const nextTab = MAIN_TABS[nextIndex];
+        recordSwipeAttempt({
+          fromTab: activeTab,
+          toTab: nextTab.id,
+          distancePx: Math.abs(deltaX),
+          velocityPxS: Math.abs(releaseVelocity),
+          thresholdPx,
+          succeeded: true,
+          direction: 'left',
+        });
+        setSwipeDirection('left');
+        actions.navigateTab(nextTab.id);
+        const hapticFired = triggerSwipeTransitionHaptic('left');
+        triggerSwipeNotice(nextTab.labelTi, 'right', hapticFired);
+      } else {
+        const prevIndex = (currentIndex - 1 + MAIN_TABS.length) % MAIN_TABS.length;
+        const prevTab = MAIN_TABS[prevIndex];
+        recordSwipeAttempt({
+          fromTab: activeTab,
+          toTab: prevTab.id,
+          distancePx: Math.abs(deltaX),
+          velocityPxS: Math.abs(releaseVelocity),
+          thresholdPx,
+          succeeded: true,
+          direction: 'right',
+        });
+        setSwipeDirection('right');
+        actions.navigateTab(prevTab.id);
+        const hapticFired = triggerSwipeTransitionHaptic('right');
+        triggerSwipeNotice(prevTab.labelTi, 'left', hapticFired);
       }
     },
-    [activeTab, actions, triggerSwipeNotice]
+    [activeTab, actions, dragX, springSnapBack, triggerSwipeNotice]
   );
 
   const isShowingFullOfflineDashboard = isOffline && !isOfflineDashboardMinimized;
   const isLightHome = activeTab === 'premiere' && !isShowingFullOfflineDashboard;
 
   return (
-    <div
-      className={`min-h-screen font-sans flex flex-col relative overflow-x-hidden antialiased transition-colors duration-200 ${
-        isLightHome
-          ? 'bg-gradient-to-b from-[#F4F7FF] via-[#EDF2FF] to-[#F5F0FF] dark:from-[#060B1E] dark:via-[#0B122B] dark:to-[#0F172A] text-slate-900 dark:text-slate-100 selection:bg-blue-500/20 selection:text-slate-900 dark:selection:text-white'
-          : 'bg-[#070709] text-slate-100 selection:bg-[#C5A059]/30 selection:text-[#F3E5AB]'
-      }`}
-    >
+    <MotionConfig reducedMotion={isPowerSavingActive ? 'always' : 'user'}>
+      <div
+        data-time-aesthetic={activeAesthetic}
+        className={`min-h-screen font-sans flex flex-col relative overflow-x-hidden antialiased transition-colors duration-300 ${
+          isLightHome
+            ? isGoldAmbient
+              ? 'bg-gradient-to-b from-[#FFFDF7] via-[#FBF3DF] to-[#F6EBD0] text-slate-900 selection:bg-amber-400/25 selection:text-slate-900'
+              : 'bg-gradient-to-b from-[#04060D] via-[#070B16] to-[#0B1120] text-slate-100 selection:bg-blue-500/20 selection:text-white'
+            : isGoldAmbient
+            ? 'bg-[#120E08] text-slate-100 selection:bg-[#E1C47D]/30 selection:text-[#F3E5AB]'
+            : 'bg-[#040508] text-slate-100 selection:bg-[#C5A059]/30 selection:text-[#F3E5AB]'
+        }`}
+      >
       {/* Background idle prefetch of OfflineModeDashboard while online */}
       <OfflineDashboardPrefetcher />
 
-      {/* Unified Ambient Depth */}
+      {/* Unified Ambient Depth tuned to Time-of-Day Aesthetic */}
       {isLightHome ? (
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-          <div className="absolute -top-24 left-1/4 w-[520px] h-[340px] bg-sky-200/35 dark:bg-sky-600/15 blur-[110px] rounded-full pointer-events-none" />
-          <div className="absolute top-1/3 right-0 w-[440px] h-[380px] bg-purple-200/35 dark:bg-purple-600/15 blur-[120px] rounded-full pointer-events-none" />
+          {isGoldAmbient ? (
+            <>
+              <div className="absolute -top-24 left-1/4 w-[560px] h-[360px] bg-amber-300/30 blur-[120px] rounded-full pointer-events-none" />
+              <div className="absolute top-1/3 right-0 w-[460px] h-[380px] bg-orange-200/30 blur-[120px] rounded-full pointer-events-none" />
+            </>
+          ) : (
+            <>
+              <div className="absolute -top-24 left-1/4 w-[520px] h-[340px] bg-indigo-900/25 blur-[120px] rounded-full pointer-events-none" />
+              <div className="absolute top-1/3 right-0 w-[440px] h-[380px] bg-slate-800/30 blur-[130px] rounded-full pointer-events-none" />
+            </>
+          )}
         </div>
       ) : (
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-          <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[850px] h-[450px] bg-gradient-to-b from-[#C5A059]/10 via-[#8E6D28]/5 to-transparent blur-[140px] rounded-full pointer-events-none" />
-          <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-amber-600/[0.03] blur-[160px] rounded-full pointer-events-none" />
+          {isGoldAmbient ? (
+            <>
+              <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[900px] h-[460px] bg-gradient-to-b from-[#E1C47D]/18 via-[#C5A059]/10 to-transparent blur-[140px] rounded-full pointer-events-none" />
+              <div className="absolute bottom-0 right-0 w-[520px] h-[520px] bg-amber-500/[0.06] blur-[160px] rounded-full pointer-events-none" />
+            </>
+          ) : (
+            <>
+              <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[850px] h-[440px] bg-gradient-to-b from-[#0F172A]/45 via-[#8E6D28]/6 to-transparent blur-[150px] rounded-full pointer-events-none" />
+              <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-indigo-950/[0.14] blur-[160px] rounded-full pointer-events-none" />
+            </>
+          )}
         </div>
       )}
 
@@ -581,12 +818,39 @@ export default function App() {
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchCancel}
           className={
             isLightHome
-              ? 'flex-1 w-full mx-auto relative touch-pan-y'
-              : 'flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-32 relative touch-pan-y'
+              ? 'flex-1 w-full mx-auto relative touch-pan-y overflow-x-hidden'
+              : 'flex-1 w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-28 sm:pb-32 relative touch-pan-y overflow-x-hidden'
           }
         >
+          {/* Interactive Mid-Swipe Snap Preview Indicator */}
+          <AnimatePresence>
+            {dragPreview && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.14 }}
+                aria-hidden="true"
+                className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-3.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-2 pointer-events-none shadow-lg backdrop-blur-md ${
+                  dragPreview.willCommit
+                    ? 'bg-[#17130A]/95 border-[#C5A059] text-[#F3E5AB]'
+                    : 'bg-slate-900/90 border-slate-700 text-slate-200'
+                }`}
+              >
+                {dragPreview.direction === 'right' && <ChevronLeft className="w-3.5 h-3.5 shrink-0" />}
+                <span>
+                  {dragPreview.willCommit
+                    ? `Release for ${dragPreview.label}`
+                    : `Keep dragging · ${dragPreview.label}`}
+                </span>
+                {dragPreview.direction === 'left' && <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Floating Touch Swipe Feedback Banner */}
           <AnimatePresence>
             {swipeNotice && (
@@ -616,8 +880,15 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          {/* Animated Slide Tab Container with Luxury Fading-Gold Entrance */}
-          <div className="relative w-full">
+          {/* Animated Slide Tab Container with Live Snap-to-Tab Spring Physics */}
+          <motion.div
+            style={
+              reduceAnimations
+                ? undefined
+                : { x: dragX, scale: dragScale, opacity: dragOpacity }
+            }
+            className="relative w-full will-change-transform"
+          >
             <AnimatePresence mode="wait">
               <motion.div
                 key={`gold-veil-${activeTab}`}
@@ -632,28 +903,43 @@ export default function App() {
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
-                initial={{
-                  opacity: 0,
-                  x: swipeDirection === 'left' ? 16 : swipeDirection === 'right' ? -16 : 0,
-                  y: 8,
-                  scale: 0.99,
-                  filter: 'drop-shadow(0 0 20px rgba(225, 196, 125, 0.4)) brightness(1.08)',
-                }}
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                  y: 0,
-                  scale: 1,
-                  filter: 'drop-shadow(0 0 0px rgba(225, 196, 125, 0)) brightness(1)',
-                }}
-                exit={{
-                  opacity: 0,
-                  x: swipeDirection === 'left' ? -16 : swipeDirection === 'right' ? 16 : 0,
-                  y: -6,
-                  scale: 0.99,
-                  filter: 'brightness(0.98)',
-                }}
-                transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
+                initial={
+                  reduceAnimations
+                    ? { opacity: 0 }
+                    : {
+                        opacity: 0,
+                        x: swipeDirection === 'left' ? 42 : -42,
+                        scale: 0.985,
+                      }
+                }
+                animate={
+                  reduceAnimations
+                    ? { opacity: 1 }
+                    : {
+                        opacity: 1,
+                        x: 0,
+                        scale: 1,
+                      }
+                }
+                exit={
+                  reduceAnimations
+                    ? { opacity: 0 }
+                    : {
+                        opacity: 0,
+                        x: swipeDirection === 'left' ? -36 : 36,
+                        scale: 0.985,
+                      }
+                }
+                transition={
+                  reduceAnimations
+                    ? { duration: 0.15 }
+                    : {
+                        type: 'spring',
+                        stiffness: 380,
+                        damping: 32,
+                        mass: 0.85,
+                      }
+                }
                 className="relative z-10"
               >
                 <motion.div
@@ -665,7 +951,7 @@ export default function App() {
                 <ActiveTabRouter />
               </motion.div>
             </AnimatePresence>
-          </div>
+          </motion.div>
         </main>
       )}
 
@@ -677,6 +963,7 @@ export default function App() {
 
       {/* Floating Bottom Navigation Bar */}
       <ConnectedBottomNav />
-    </div>
+      </div>
+    </MotionConfig>
   );
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  BarChart3,
   Briefcase,
   Building2,
   Camera,
@@ -249,6 +250,13 @@ export const SovereignSideDrawer: React.FC<SovereignSideDrawerProps> = ({
       labelEn: 'History & Saved',
       icon: TrendingUp,
       onClick: () => handleSelectTool(onOpenHistory),
+    },
+    {
+      id: 'analytics',
+      labelTi: 'ትንታኔን ካርታ ንኽክእ',
+      labelEn: 'Analytics & Heatmap',
+      icon: BarChart3,
+      onClick: () => handleSelectTool(() => onNavigateTab('analytics')),
     },
     {
       id: 'settings',

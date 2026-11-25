@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { AdminConfigLivePreview } from './AdminConfigLivePreview';
+import { HapticFeedbackToggle } from './HapticFeedbackToggle';
+import { SwipeSensitivitySlider } from './SwipeSensitivitySlider';
+import { BatterySaverToggle } from './BatterySaverToggle';
 
 interface AdminConfigViewProps {
   currentUser: UserProfile;
@@ -365,6 +368,39 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                   <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
                 </label>
               </div>
+
+              <HapticFeedbackToggle
+                variant="dark"
+                showAudioSnapControl
+                onChange={(enabled) =>
+                  triggerNotification(
+                    enabled
+                      ? language === 'ti'
+                        ? 'ሃፕቲክ ግብረ-መልሲ ብደረጃ መድረኽ ተኸፊቱ'
+                        : 'Haptic feedback enabled globally for UI gestures.'
+                      : language === 'ti'
+                      ? 'ሃፕቲክ ግብረ-መልሲ ብደረጃ መድረኽ ተዓጽዩ'
+                      : 'Haptic feedback disabled globally for UI gestures.'
+                  )
+                }
+              />
+
+              <SwipeSensitivitySlider variant="dark" />
+
+              <BatterySaverToggle
+                variant="dark"
+                onChange={(enabled) =>
+                  triggerNotification(
+                    enabled
+                      ? language === 'ti'
+                        ? 'መዕቀቢ ባትሪ (Battery Saver) ተኸፊቱ'
+                        : 'Battery Saver enabled: lowers animation FPS & pauses background sync on low battery.'
+                      : language === 'ti'
+                      ? 'መዕቀቢ ባትሪ (Battery Saver) ተዓጽዩ'
+                      : 'Battery Saver disabled.'
+                  )
+                }
+              />
             </div>
           </div>
         </div>
@@ -840,6 +876,24 @@ export const AdminConfigView: React.FC<AdminConfigViewProps> = ({
                   <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
                 </label>
               </div>
+
+              <HapticFeedbackToggle
+                variant="dark"
+                showAudioSnapControl
+                onChange={(enabled) =>
+                  triggerNotification(
+                    enabled
+                      ? language === 'ti'
+                        ? 'ሃፕቲክ ግብረ-መልሲ ብደረጃ መድረኽ ተኸፊቱ'
+                        : 'Haptic feedback enabled globally for UI gestures.'
+                      : language === 'ti'
+                      ? 'ሃፕቲክ ግብረ-መልሲ ብደረጃ መድረኽ ተዓጽዩ'
+                      : 'Haptic feedback disabled globally for UI gestures.'
+                  )
+                }
+              />
+
+              <SwipeSensitivitySlider variant="dark" />
             </div>
           </div>
         </div>

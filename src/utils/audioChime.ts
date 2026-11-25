@@ -160,6 +160,61 @@ class AudioChimeEngine {
       // Graceful fallback
     }
   }
+
+  /**
+   * Subtle tactile 'snap' / 'click' micro-sound synced with committed tab swipe transitions
+   */
+  public playHapticSnapClick(
+    direction: 'left' | 'right' = 'left',
+    intensity: 'light' | 'medium' | 'crisp' = 'medium'
+  ): boolean {
+    try {
+      const ctx = this.getContext();
+      if (!ctx) return false;
+
+      const now = ctx.currentTime;
+      const peakGain =
+        intensity === 'light' ? 0.045 : intensity === 'crisp' ? 0.1 : 0.07;
+
+      // 1. Soft wood/ceramic resonant thump-snap body
+      const bodyOsc = ctx.createOscillator();
+      const bodyGain = ctx.createGain();
+      bodyOsc.type = 'sine';
+      const startFreq = direction === 'left' ? 760 : 640;
+      const endFreq = direction === 'left' ? 230 : 190;
+      bodyOsc.frequency.setValueAtTime(startFreq, now);
+      bodyOsc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.028);
+
+      bodyGain.gain.setValueAtTime(0.0001, now);
+      bodyGain.gain.linearRampToValueAtTime(peakGain, now + 0.004);
+      bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.036);
+
+      bodyOsc.connect(bodyGain);
+      bodyGain.connect(ctx.destination);
+      bodyOsc.start(now);
+      bodyOsc.stop(now + 0.04);
+
+      // 2. Micro-click crisp transient edge
+      const clickOsc = ctx.createOscillator();
+      const clickGain = ctx.createGain();
+      clickOsc.type = 'triangle';
+      clickOsc.frequency.setValueAtTime(direction === 'left' ? 1850 : 1620, now);
+      clickOsc.frequency.exponentialRampToValueAtTime(920, now + 0.012);
+
+      clickGain.gain.setValueAtTime(0.0001, now);
+      clickGain.gain.linearRampToValueAtTime(peakGain * 0.45, now + 0.002);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.015);
+
+      clickOsc.connect(clickGain);
+      clickGain.connect(ctx.destination);
+      clickOsc.start(now);
+      clickOsc.stop(now + 0.018);
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 export const audioChime = new AudioChimeEngine();
@@ -178,4 +233,11 @@ export function playCommandSuccessChime(volume?: number): void {
 
 export function playVoiceDeactivateChime(volume?: number): void {
   audioChime.playVoiceDeactivateChime(volume);
+}
+
+export function playHapticSnapClick(
+  direction?: 'left' | 'right',
+  intensity?: 'light' | 'medium' | 'crisp'
+): boolean {
+  return audioChime.playHapticSnapClick(direction, intensity);
 }

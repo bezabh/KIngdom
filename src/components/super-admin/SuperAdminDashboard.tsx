@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserProfile, AppSystemConfig, ManagedUser } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
+import { useBatterySaver } from '../../context/BatterySaverContext';
 import { isAdminOrCreator, hasPrivilege, DEFAULT_APP_CONFIG } from '../../lib/permissions';
 import { SuperAdmin2FAModal } from './SuperAdmin2FAModal';
 import { 
@@ -60,6 +61,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   onConfigChange,
 }) => {
   const { language } = useLanguage();
+  const { isPowerSavingActive } = useBatterySaver();
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('overview');
   
   // 2FA Security Elevated State
@@ -243,9 +245,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   useEffect(() => {
     fetchOverview();
+    if (isPowerSavingActive) return;
     const interval = setInterval(fetchOverview, 30000); // 30s auto telemetry
     return () => clearInterval(interval);
-  }, []);
+  }, [isPowerSavingActive]);
 
   // Fetch AI Services
   const fetchAiServices = async () => {

@@ -33,15 +33,8 @@ import {
   saveVoicePersonaSettings,
 } from '../types/voicePersona';
 import { VoicePersonaSelector } from './VoicePersonaSelector';
-import {
-  getHapticSettings,
-  saveHapticSettings,
-  triggerSwipeTransitionHaptic,
-  isVibrationApiSupported,
-  HapticSettings,
-  HapticIntensity,
-  HAPTICS_SETTINGS_EVENT,
-} from '../utils/haptics';
+import { HapticAccessibilitySettings } from './HapticAccessibilitySettings';
+import { TimeOfDayThemeSettings } from './TimeOfDayThemeSettings';
 
 interface UserManagementModalProps {
   isOpen: boolean;
@@ -111,16 +104,6 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
     getDefaultPaymentMethod(user?.id, user?.email)
   );
   const [isPaymentMethodsModalOpen, setIsPaymentMethodsModalOpen] = useState(false);
-  const [hapticSettings, setHapticSettings] = useState<HapticSettings>(() => getHapticSettings());
-
-  useEffect(() => {
-    const onHapticsUpdated = (e: Event) => {
-      const detail = (e as CustomEvent<HapticSettings>).detail;
-      if (detail) setHapticSettings(detail);
-    };
-    window.addEventListener(HAPTICS_SETTINGS_EVENT, onHapticsUpdated);
-    return () => window.removeEventListener(HAPTICS_SETTINGS_EVENT, onHapticsUpdated);
-  }, []);
 
   useEffect(() => {
     setDefaultPaymentMethod(getDefaultPaymentMethod(user?.id, user?.email));
@@ -1161,87 +1144,8 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                 </button>
               </div>
 
-              {/* Item 3c.1: Android Vibration API Swipe Haptic Feedback */}
-              <div className="p-3.5 space-y-2.5 bg-slate-50/70 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 flex items-center justify-center shrink-0">
-                      <Smartphone className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                        <span>ናይ ስዋይፕ ሃፕቲክ (Swipe Haptics)</span>
-                        <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 font-mono text-[9px]">
-                          Vibration API
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        Tactile Android physical pulse on swipe &amp; tab transitions
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextEnabled = !hapticSettings.enabled;
-                      const updated = saveHapticSettings({
-                        enabled: nextEnabled,
-                        swipeGesturesEnabled: nextEnabled,
-                      });
-                      setHapticSettings(updated);
-                      if (nextEnabled) triggerSwipeTransitionHaptic('left');
-                    }}
-                    className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
-                      hapticSettings.enabled ? 'bg-amber-600 justify-end' : 'bg-stone-300 justify-start'
-                    }`}
-                  >
-                    <div className="bg-white w-5 h-5 rounded-full shadow-md" />
-                  </button>
-                </div>
-
-                {hapticSettings.enabled && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 pl-12">
-                    <div className="flex items-center space-x-1">
-                      {(['light', 'medium', 'crisp'] as HapticIntensity[]).map((level) => (
-                        <button
-                          key={level}
-                          type="button"
-                          onClick={() => {
-                            const updated = saveHapticSettings({ intensity: level });
-                            setHapticSettings(updated);
-                            triggerSwipeTransitionHaptic('left');
-                          }}
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase transition-all cursor-pointer ${
-                            hapticSettings.intensity === level
-                              ? 'bg-amber-600 text-white shadow-xs'
-                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-amber-50'
-                          }`}
-                        >
-                          {level}
-                        </button>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const fired = triggerSwipeTransitionHaptic('left');
-                        showToast(
-                          fired
-                            ? 'ናይ Android ሃፕቲክ ምንቅጥቃጥ ተፈቲኑ (Haptic pulse triggered via Vibration API)'
-                            : isVibrationApiSupported()
-                            ? 'Vibration pattern sent (ensure device vibrate is unmuted)'
-                            : 'Browser Vibration API unavailable on this desktop device — active on Android Chrome/WebView'
-                        );
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-[10px] font-bold transition-colors cursor-pointer"
-                    >
-                      Test Haptic Pulse
-                    </button>
-                  </div>
-                )}
-              </div>
+              {/* Item 3c.1: Accessibility & Gesture Haptic Feedback */}
+              <HapticAccessibilitySettings variant="light" onStatusToast={showToast} />
 
               {/* Item 3c.2: Ambient Sound & Traditional Tigray Instruments (Masinko / Kirar) */}
               <div className="p-3.5 space-y-3 bg-gradient-to-r from-amber-50/50 via-stone-50/50 to-amber-50/30 border-y border-amber-200/40">
@@ -2222,6 +2126,9 @@ export const UserManagementModal: React.FC<UserManagementModalProps> = ({
                     )}
                   </div>
                 </div>
+
+                {/* Time-of-Day Adaptive Theme (Sunrise / Sunset Auto-Transition) */}
+                <TimeOfDayThemeSettings variant="light" />
 
                 {/* Primary Theme Scheme Selection Cards */}
                 <div className="space-y-2.5">

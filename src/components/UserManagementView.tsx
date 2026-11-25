@@ -4,9 +4,10 @@ import {
   Users, UserPlus, Search, Filter, ShieldCheck, ShieldAlert, CheckCircle2, 
   XCircle, MoreVertical, Edit3, Trash2, Key, Download, RefreshCw, 
   Smartphone, Mail, MapPin, Coins, ArrowUpDown, Lock, UserCheck, Eye,
-  Sliders, Sparkles, Check, X, Shield, Cpu, Database, Server, Crown, FileText
+  Sliders, Sparkles, Check, X, Shield, Cpu, Database, Server, Crown, FileText, Accessibility
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { HapticAccessibilitySettings } from './HapticAccessibilitySettings';
 import { 
   PRIVILEGE_METADATA, 
   ROLE_DEFAULT_PRIVILEGES, 
@@ -164,7 +165,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     return INITIAL_MANAGED_USERS;
   });
 
-  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'matrix'>('directory');
+  const [activeSubTab, setActiveSubTab] = useState<'directory' | 'matrix' | 'accessibility'>('directory');
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -454,11 +455,12 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         </div>
       </div>
 
-      {/* Sub Tab Switcher: Directory vs Role Matrix */}
-      <div className="bg-[#090812] border border-[#8E6D28]/30 rounded-2xl p-1.5 flex items-center space-x-2 shadow-md">
+      {/* Sub Tab Switcher: Directory vs Role Matrix vs Accessibility */}
+      <div className="bg-[#090812] border border-[#8E6D28]/30 rounded-2xl p-1.5 flex flex-wrap items-center gap-1.5 shadow-md">
         <button
+          type="button"
           onClick={() => setActiveSubTab('directory')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+          className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
             activeSubTab === 'directory'
               ? 'bg-[#2A2010] text-[#F3E5AB] border border-[#C5A059]/60 shadow-sm'
               : 'text-slate-400 hover:text-white hover:bg-[#141220]'
@@ -469,8 +471,9 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveSubTab('matrix')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+          className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
             activeSubTab === 'matrix'
               ? 'bg-[#2A2010] text-[#F3E5AB] border border-[#C5A059]/60 shadow-sm'
               : 'text-slate-400 hover:text-white hover:bg-[#141220]'
@@ -478,6 +481,19 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
         >
           <Sliders className="w-4 h-4 text-[#E1C47D]" />
           <span>{language === 'ti' ? 'ናይ መሰላት ማትሪክስ (Role Matrix)' : 'Role & Privilege Matrix'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('accessibility')}
+          className={`min-h-[40px] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 cursor-pointer ${
+            activeSubTab === 'accessibility'
+              ? 'bg-[#2A2010] text-[#F3E5AB] border border-[#C5A059]/60 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-[#141220]'
+          }`}
+        >
+          <Accessibility className="w-4 h-4 text-[#E1C47D]" />
+          <span>{language === 'ti' ? 'ተበጻሕነትን ሃፕቲክስን' : 'Accessibility & Haptics'}</span>
         </button>
       </div>
 
@@ -792,7 +808,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             </div>
           </div>
         </>
-      ) : (
+      ) : activeSubTab === 'matrix' ? (
         /* Role & Privilege Matrix Tab */
         <div className="bg-[#0B0914] border border-[#8E6D28]/30 rounded-xl overflow-hidden shadow-xl p-5 space-y-4">
           <div>
@@ -850,6 +866,8 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             </table>
           </div>
         </div>
+      ) : (
+        <HapticAccessibilitySettings variant="dark" onStatusToast={triggerNotification} />
       )}
 
       {/* User Rights & Privileges Granular Management Modal */}

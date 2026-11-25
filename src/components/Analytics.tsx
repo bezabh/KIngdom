@@ -53,12 +53,14 @@ import {
   SlidersHorizontal,
   Volume2,
   MessageSquareText,
-  FileText
+  FileText,
+  Crosshair
 } from 'lucide-react';
 import { UserProfile, SavedItem } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { AdminRevenueChurnChart } from './AdminRevenueChurnChart';
 import { UserActivityDashboard } from './UserActivityDashboard';
+import { InteractionHeatmapView } from './InteractionHeatmapView';
 import { triggerChurnAlert, getMockWeeklySummaryData, playGoldenNotificationChime } from '../services/notificationService';
 import { generateWeeklySummaryPdfReport } from '../utils/weeklySummaryPdfReport';
 import { getStoredAppConfig, saveStoredAppConfig } from '../lib/permissions';
@@ -137,7 +139,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({
   }, [startDate, endDate, language]);
 
   // Analytics Tab State
-  const [analyticsTab, setAnalyticsTab] = useState<'activity_dashboard' | 'telemetry' | 'mrr_churn' | 'churn_config'>('activity_dashboard');
+  const [analyticsTab, setAnalyticsTab] = useState<'activity_dashboard' | 'telemetry' | 'heatmap' | 'mrr_churn' | 'churn_config'>('activity_dashboard');
 
   // Churn Push Notification Configuration State
   const [enableChurnAlert, setEnableChurnAlert] = useState<boolean>(() => {
@@ -582,6 +584,11 @@ export const Analytics: React.FC<AnalyticsProps> = ({
             icon: Activity,
           },
           {
+            id: 'heatmap',
+            label: language === 'ti' ? 'ካርታ ንኽክእ (Heatmap)' : 'Interaction Heatmap',
+            icon: Crosshair,
+          },
+          {
             id: 'mrr_churn',
             label: language === 'ti' ? 'ናይ 6 ወርሒ MRR & Churn' : '6-Month MRR & Churn',
             icon: TrendingUp,
@@ -594,7 +601,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({
         ]}
         activeTabId={analyticsTab}
         onSelectTab={(id) =>
-          setAnalyticsTab(id as 'activity_dashboard' | 'telemetry' | 'mrr_churn' | 'churn_config')
+          setAnalyticsTab(id as 'activity_dashboard' | 'telemetry' | 'heatmap' | 'mrr_churn' | 'churn_config')
         }
         tabTrailingSlot={
           <div className="hidden lg:flex items-center gap-2.5 text-xs text-slate-400 tabular-nums whitespace-nowrap">
@@ -732,6 +739,11 @@ export const Analytics: React.FC<AnalyticsProps> = ({
           onNavigateTab={onNavigateTab}
         />
       )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 0B: INTERACTION HEATMAP & ACCESSIBILITY TAP PLACEMENT                */}
+      {/* ========================================================================= */}
+      {analyticsTab === 'heatmap' && <InteractionHeatmapView />}
 
       {/* ========================================================================= */}
       {/* VIEW 1: 6-MONTH MRR & CHURN RECHARTS DASHBOARD                            */}

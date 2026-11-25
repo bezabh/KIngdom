@@ -119,6 +119,10 @@ import {
   TranslationFeatureCardsGrid,
   TranslatorFeatureView,
 } from './translator/TranslationFeatureCardsGrid';
+import {
+  ComposableAdView,
+  ADMOB_BANNER_TEST_AD_UNIT_ID,
+} from './ComposableAdView';
 
 interface AndroidAppInterfaceViewProps {
   user: UserProfile;
@@ -3541,6 +3545,18 @@ OneSignal.getUser().addTags(Map.of("lang", "ti", "tier", "pro"));`}
               </AnimatePresence>
 
             </div>
+
+            {/* =============================================================== */}
+            {/* GMA NEXT-GEN COMPOSABLE ADVIEW BANNER (HOME SCREEN BOTTOM BAR)  */}
+            {/* =============================================================== */}
+            {activeScreen === 'home' && !isBiometricPromptOpen && (
+              <ComposableAdView
+                adUnitId={ADMOB_BANNER_TEST_AD_UNIT_ID}
+                isOffline={offlineMode}
+                hasConnectivity={wifiEnabled || mobileDataEnabled}
+                darkMode={darkMode}
+              />
+            )}
 
             {/* =============================================================== */}
             {/* ANDROID SYSTEM NAVIGATION BAR (BACK, HOME, RECENTS)             */}

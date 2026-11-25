@@ -175,13 +175,34 @@ button:hover svg.lucide, .group:hover svg.lucide {
   animation: goldPulseGlow 4s ease-in-out infinite;
 }
 
-/* Custom Branding & Metallic Gold Theme Variables */
+/* Custom Branding & Time-of-Day Adaptive Theme Variables */
 :root {
   --axum-gold: #E1C47D;
   --axum-gold-glow: rgba(225, 196, 125, 0.4);
   --axum-gold-text: #D4AF37;
   --axum-hue-primary: #0F2856;
   --axum-shimmer-active: 1;
+  --axum-studio-canvas: #070709;
+  --axum-surface-card: #0B0914;
+  --axum-border-subtle: rgba(197, 160, 89, 0.25);
+}
+
+html.axum-aesthetic-gold-ambient {
+  --axum-gold: #E1C47D;
+  --axum-gold-glow: rgba(225, 196, 125, 0.48);
+  --axum-gold-text: #F3E5AB;
+  --axum-studio-canvas: #120E08;
+  --axum-surface-card: #1A140B;
+  --axum-border-subtle: rgba(225, 196, 125, 0.36);
+}
+
+html.axum-aesthetic-obsidian-deep {
+  --axum-gold: #C5A059;
+  --axum-gold-glow: rgba(197, 160, 89, 0.22);
+  --axum-gold-text: #D4AF37;
+  --axum-studio-canvas: #040508;
+  --axum-surface-card: #090B11;
+  --axum-border-subtle: rgba(142, 109, 40, 0.22);
 }
 
 html.theme-high-contrast-gold {
@@ -349,4 +370,23 @@ html.font-theme-modern .font-sans {
   font-family: 'Plus Jakarta Sans', 'Noto Sans Ethiopic', sans-serif !important;
 }
 
+/* ========================================================================= */
+/* BATTERY SAVER MODE: Lower Global Animation Frame Rate & Transition Cost   */
+/* ========================================================================= */
+html.axumite-battery-saver *,
+html.axumite-battery-saver *::before,
+html.axumite-battery-saver *::after {
+  animation-timing-function: steps(6, end) !important;
+  transition-timing-function: steps(4, end) !important;
+  transition-duration: 0.12s !important;
+}
 
+html.axumite-battery-saver .metallic-gold-shimmer,
+html.axumite-battery-saver .gold-glow-animated,
+html.axumite-battery-saver .gold-pulse-box,
+html.axumite-battery-saver .animate-continuous-roll,
+html.axumite-battery-saver .animate-bg-3d-roll,
+html.axumite-battery-saver .gold-shimmer-accent {
+  animation-duration: 18s !important;
+  animation-timing-function: steps(6, end) !important;
+}

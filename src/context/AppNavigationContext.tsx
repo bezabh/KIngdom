@@ -13,6 +13,7 @@ import type { PaymentSystemSubTab } from '../components/PaymentSystem';
 import type { TranslatorFeatureView } from '../components/translator/TranslationFeatureCardsGrid';
 import type { AxumiteWisdomQuote } from '../data/axumiteManuscriptQuotes';
 import { hasPrivilege } from '../lib/permissions';
+import { useAdaptiveTheme } from './AdaptiveThemeContext';
 import { useAuthUser } from './AuthUserContext';
 import { useNetwork } from './NetworkContext';
 
@@ -232,20 +233,15 @@ const AppActionsContext = createContext<AppActionsType | undefined>(undefined);
 export const AppNavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isOffline, setIsOfflineDashboardMinimized } = useNetwork();
   const { user, isAuthReady, loginRedirectTick, authDismissTick } = useAuthUser();
+  const { activeAesthetic, setMode: setAdaptiveMode } = useAdaptiveTheme();
 
   const isOfflineRef = useRef(isOffline);
   isOfflineRef.current = isOffline;
 
   const [activeTab, setActiveTab] = useState<AppTab>('premiere');
-  const [homeTheme, setHomeThemeState] = useState<HomeThemeMode>(() => {
-    try {
-      const saved = localStorage.getItem('axumite_home_theme_v1');
-      if (saved === 'dark' || saved === 'light') return saved;
-    } catch {
-      // ignore
-    }
-    return 'light';
-  });
+  const [homeTheme, setHomeThemeState] = useState<HomeThemeMode>(() =>
+    activeAesthetic === 'obsidian-deep' ? 'dark' : 'light'
+  );
   const [paymentSubTab, setPaymentSubTab] = useState<PaymentSystemSubTab>('saas-plans');
   const [translatorInitialFeature, setTranslatorInitialFeature] = useState<TranslatorFeatureView>('hub');
   const [translatorFeatureVersion, setTranslatorFeatureVersion] = useState<number>(0);
@@ -253,32 +249,44 @@ export const AppNavigationProvider: React.FC<{ children: React.ReactNode }> = ({
   const [pendingTranslationText, setPendingTranslationText] = useState<string>('');
   const [modals, dispatchModal] = useReducer(modalReducer, INITIAL_MODAL_STATE);
 
-  // Sync `.dark` on `document.documentElement`: dark mode is active either when user selects dark homeTheme or when inside a dark studio tab
+  // Sync `.dark` and homeTheme automatically with Time-of-Day Adaptive Aesthetic
+  useEffect(() => {
+    const targetHomeTheme: HomeThemeMode =
+      activeAesthetic === 'obsidian-deep' ? 'dark' : 'light';
+    setHomeThemeState(targetHomeTheme);
+    try {
+      localStorage.setItem('axumite_home_theme_v1', targetHomeTheme);
+    } catch {
+      // ignore
+    }
+  }, [activeAesthetic]);
+
+  // Sync `.dark` on `document.documentElement`: dark mode is active either when user/sun-cycle is Obsidian-Deep (`dark`) or inside a studio tab
   useEffect(() => {
     const shouldUseDark = activeTab !== 'premiere' || homeTheme === 'dark';
     document.documentElement.classList.toggle('dark', shouldUseDark);
   }, [activeTab, homeTheme]);
 
-  const setHomeTheme = useCallback((mode: HomeThemeMode) => {
-    setHomeThemeState(mode);
-    try {
-      localStorage.setItem('axumite_home_theme_v1', mode);
-    } catch {
-      // ignore
-    }
-  }, []);
+  const homeThemeRef = useRef<HomeThemeMode>(homeTheme);
+  homeThemeRef.current = homeTheme;
 
-  const toggleHomeTheme = useCallback(() => {
-    setHomeThemeState((prev) => {
-      const next: HomeThemeMode = prev === 'light' ? 'dark' : 'light';
+  const setHomeTheme = useCallback(
+    (mode: HomeThemeMode) => {
+      setHomeThemeState(mode);
+      setAdaptiveMode(mode === 'dark' ? 'obsidian-deep' : 'gold-ambient');
       try {
-        localStorage.setItem('axumite_home_theme_v1', next);
+        localStorage.setItem('axumite_home_theme_v1', mode);
       } catch {
         // ignore
       }
-      return next;
-    });
-  }, []);
+    },
+    [setAdaptiveMode]
+  );
+
+  const toggleHomeTheme = useCallback(() => {
+    const next: HomeThemeMode = homeThemeRef.current === 'light' ? 'dark' : 'light';
+    setHomeTheme(next);
+  }, [setHomeTheme]);
 
   // Capture PWA beforeinstallprompt globally so PwaInstallModal can be lazy-loaded on demand
   useEffect(() => {

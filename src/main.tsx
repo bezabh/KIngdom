@@ -11,6 +11,8 @@ import { SavedInsightsProvider } from './context/SavedInsightsContext.tsx';
 import { NotificationProvider } from './context/NotificationContext.tsx';
 import { AppNavigationProvider } from './context/AppNavigationContext.tsx';
 import { VoiceCommandProvider } from './context/VoiceCommandContext.tsx';
+import { BatterySaverProvider } from './context/BatterySaverContext.tsx';
+import { AdaptiveThemeProvider } from './context/AdaptiveThemeContext.tsx';
 
 // Initialize typography preference (Standard Modern vs. Historical Calligraphic Ge'ez)
 try {
@@ -30,21 +32,25 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <LanguageProvider>
       <BrandingThemeProvider>
-        <NetworkProvider>
-          <AuthUserProvider>
-            <SubscriptionProvider>
-              <SavedInsightsProvider>
-                <NotificationProvider>
-                  <AppNavigationProvider>
-                    <VoiceCommandProvider>
-                      <App />
-                    </VoiceCommandProvider>
-                  </AppNavigationProvider>
-                </NotificationProvider>
-              </SavedInsightsProvider>
-            </SubscriptionProvider>
-          </AuthUserProvider>
-        </NetworkProvider>
+        <AdaptiveThemeProvider>
+          <NetworkProvider>
+            <AuthUserProvider>
+              <SubscriptionProvider>
+                <SavedInsightsProvider>
+                  <NotificationProvider>
+                    <AppNavigationProvider>
+                      <VoiceCommandProvider>
+                        <BatterySaverProvider>
+                          <App />
+                        </BatterySaverProvider>
+                      </VoiceCommandProvider>
+                    </AppNavigationProvider>
+                  </NotificationProvider>
+                </SavedInsightsProvider>
+              </SubscriptionProvider>
+            </AuthUserProvider>
+          </NetworkProvider>
+        </AdaptiveThemeProvider>
       </BrandingThemeProvider>
     </LanguageProvider>
   </StrictMode>

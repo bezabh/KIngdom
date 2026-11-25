@@ -11,6 +11,13 @@ import { AdminDataExportModal } from './AdminDataExportModal';
 import { SuperAdminDashboard } from './super-admin/SuperAdminDashboard';
 import { SaasSubscriptionAdminDeck } from './SaasSubscriptionAdminDeck';
 import { DashboardLayoutShell, DashboardTabItem } from './DashboardLayoutShell';
+import { HapticFeedbackToggle } from './HapticFeedbackToggle';
+import { HapticPatternSelector } from './HapticPatternSelector';
+import { HapticAccessibilitySettings } from './HapticAccessibilitySettings';
+import { SwipeSensitivitySlider } from './SwipeSensitivitySlider';
+import { BatterySaverToggle } from './BatterySaverToggle';
+import { TimeOfDayThemeSettings } from './TimeOfDayThemeSettings';
+import { InteractionAnalyticsChart } from './InteractionAnalyticsChart';
 import {
   Users,
   CreditCard,
@@ -25,6 +32,7 @@ import {
   Download,
   FileSpreadsheet,
   Zap,
+  Settings,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { isAdminOrCreator, hasPrivilege } from '../lib/permissions';
@@ -45,6 +53,7 @@ export type ManagementSection =
   | 'payments'
   | 'customers'
   | 'admin-config'
+  | 'settings'
   | 'activity';
 
 interface ManagementHubProps {
@@ -117,6 +126,11 @@ export const ManagementHub: React.FC<ManagementHubProps> = ({
           },
         ]
       : []),
+    {
+      id: 'settings',
+      label: language === 'ti' ? 'ቅጥዕታት ተበጻሕነት' : 'Settings & Accessibility',
+      icon: Settings,
+    },
     ...(canManagePayments
       ? [
           {
@@ -280,6 +294,44 @@ export const ManagementHub: React.FC<ManagementHubProps> = ({
           )}
           {activeSection === 'admin-config' && (
             <AdminConfigView currentUser={user} onConfigChange={onConfigChange} />
+          )}
+          {activeSection === 'settings' && (
+            <section
+              aria-label={
+                language === 'ti'
+                  ? 'ቅጥዕታት ተበጻሕነትን ሃፕቲክስን'
+                  : 'Management Hub Settings and Accessibility'
+              }
+              className="space-y-5"
+            >
+              <div className="bg-[#0B0914] border border-[#8E6D28]/30 rounded-2xl p-5 space-y-4 shadow-lg">
+                <div className="space-y-1">
+                  <h2 className="text-base font-bold text-[#F3E5AB] font-serif">
+                    {language === 'ti'
+                      ? 'ቅጥዕታት መተግበሪን ተበጻሕነትን (App Settings & Accessibility)'
+                      : 'Settings & Accessibility Controls'}
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    {language === 'ti'
+                      ? 'ንምንቅስቓስ UI፣ ስዋይፕን ጠውቅን ዓለምለኻዊ ሃፕቲክ ግብረ-መልሲ ኣመሓድሩ።'
+                      : 'Manage global UI gesture haptic preferences and accessibility controls across the workspace.'}
+                  </p>
+                </div>
+
+                <HapticFeedbackToggle variant="dark" />
+                <HapticPatternSelector variant="dark" />
+                <SwipeSensitivitySlider variant="dark" />
+                <TimeOfDayThemeSettings variant="dark" />
+                <BatterySaverToggle variant="dark" />
+              </div>
+
+              <HapticAccessibilitySettings
+                variant="dark"
+                showSwipeSlider={false}
+                showPatternSelector={false}
+              />
+              <InteractionAnalyticsChart variant="dark" />
+            </section>
           )}
           {activeSection === 'payments' && <PaymentManagementView />}
           {activeSection === 'customers' && <CustomerManagementView />}

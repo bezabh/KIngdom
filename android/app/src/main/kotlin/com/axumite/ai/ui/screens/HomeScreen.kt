@@ -1,5 +1,9 @@
 package com.axumite.ai.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,20 +13,39 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.navigation.NavController
+import com.axumite.ai.AdMobInitializer
 import com.axumite.ai.ui.navigation.Screen
 import com.axumite.ai.ui.theme.GoldPrimary
 import com.axumite.ai.ui.theme.GoldSecondary
 import com.axumite.ai.ui.theme.RoyalDarkSurface
+import com.google.android.libraries.ads.mobile.sdk.banner.AdSize
+import com.google.android.libraries.ads.mobile.sdk.banner.AdView
+import com.google.android.libraries.ads.mobile.sdk.banner.BannerAd
+import com.google.android.libraries.ads.mobile.sdk.banner.BannerAdRequest
+import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+
+private const val HOME_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/9214589741"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,6 +75,9 @@ fun HomeScreen(navController: NavController) {
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = RoyalDarkSurface)
             )
+        },
+        bottomBar = {
+            HomeBannerAd()
         }
     ) { paddingValues ->
         LazyColumn(
@@ -202,4 +228,75 @@ fun FeatureGridCard(
             }
         }
     }
+}
+
+@Composable
+private fun HomeBannerAd(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    if (LocalInspectionMode.current) return
+
+    val adWidthDp = LocalConfiguration.current.screenWidthDp.coerceAtLeast(320)
+    val hostContext = remember(context) { context.findActivity() ?: context }
+    val adView = remember(hostContext) { AdView(hostContext) }
+    var isAdLoaded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(adView, adWidthDp) {
+        val initialized = AdMobInitializer.awaitInitialization()
+        if (!initialized) return@LaunchedEffect
+
+        try {
+            val adSize = AdSize.getLargeAnchoredAdaptiveBannerAdSize(hostContext, adWidthDp)
+            val adRequest = BannerAdRequest.Builder(HOME_BANNER_AD_UNIT_ID, adSize).build()
+            adView.loadAd(
+                adRequest,
+                object : AdLoadCallback<BannerAd> {
+                    override fun onAdLoaded(ad: BannerAd) {
+                        adView.post { isAdLoaded = true }
+                        Log.d("AxumiteBanner", "Banner ad loaded.")
+                    }
+
+                    override fun onAdFailedToLoad(adError: LoadAdError) {
+                        adView.post { isAdLoaded = false }
+                        Log.w("AxumiteBanner", "Banner ad failed to load: ${adError.message}")
+                    }
+                }
+            )
+        } catch (t: Throwable) {
+            isAdLoaded = false
+            Log.w("AxumiteBanner", "Failed to load banner ad", t)
+        }
+    }
+
+    DisposableEffect(adView) {
+        onDispose {
+            runCatching { adView.destroy() }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (isAdLoaded) {
+                    Modifier
+                        .background(RoyalDarkSurface)
+                        .navigationBarsPadding()
+                        .padding(top = 4.dp)
+                } else {
+                    Modifier
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        AndroidView(
+            modifier = Modifier.wrapContentSize(),
+            factory = { adView }
+        )
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

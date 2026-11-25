@@ -19,6 +19,7 @@ import {
 import { isValidVoicePersonaId, saveVoicePersonaSettings } from '../types/voicePersona';
 import { getStableContentHash, safeWriteLocalStorage } from '../utils/dataOptimizer';
 import { useBrandingTheme } from './BrandingThemeContext';
+import { isBatterySaverPowerSaveActive } from './BatterySaverContext';
 
 export const DEFAULT_USER: UserProfile = {
   id: 'usr_guest_001',
@@ -267,7 +268,8 @@ export const AuthUserProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         normalizedEmail &&
         normalizedEmail !== 'guest@axumite.ai' &&
         user?.isLoggedIn &&
-        hasActiveFirebaseAuthForEmail(normalizedEmail)
+        hasActiveFirebaseAuthForEmail(normalizedEmail) &&
+        !isBatterySaverPowerSaveActive()
       ) {
         syncUserProfileToFirestore(user);
       }

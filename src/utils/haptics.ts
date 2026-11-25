@@ -7,7 +7,84 @@
  * Android WebView JS bridge (`window.AxumiteAndroidHaptics`).
  */
 
+import { playHapticSnapClick } from './audioChime';
+
 export type HapticIntensity = 'light' | 'medium' | 'crisp';
+export type HapticPatternIntensity = 'subtle' | 'moderate' | 'strong';
+
+export interface HapticPatternProfile {
+  id: HapticPatternIntensity;
+  legacyIntensity: HapticIntensity;
+  labelEn: string;
+  labelTi: string;
+  descriptionEn: string;
+  descriptionTi: string;
+  swipeThresholdMs: number;
+  swipeLeftPattern: readonly [number, number, number];
+  swipeRightPattern: readonly [number, number, number];
+  tabTapMs: number;
+  bottomNavThudPattern: readonly [number, number, number];
+  bottomNavPrimaryThudPattern: readonly [number, number, number];
+  boundaryPattern: readonly [number, number, number];
+}
+
+export const HAPTIC_PATTERN_PROFILES: Record<HapticPatternIntensity, HapticPatternProfile> = {
+  subtle: {
+    id: 'subtle',
+    legacyIntensity: 'light',
+    labelEn: 'Subtle',
+    labelTi: 'ረቂቕ',
+    descriptionEn: 'Gentle micro-pulse for quiet, minimal tactile cues.',
+    descriptionTi: 'ንህዱእን ረቂቕን ኣካላዊ ምልክት ዝኸውን ቀሊል ምንቅጥቃጥ።',
+    swipeThresholdMs: 6,
+    swipeLeftPattern: [8, 12, 12],
+    swipeRightPattern: [12, 12, 8],
+    tabTapMs: 8,
+    bottomNavThudPattern: [10, 12, 18],
+    bottomNavPrimaryThudPattern: [12, 14, 22],
+    boundaryPattern: [10, 26, 10],
+  },
+  moderate: {
+    id: 'moderate',
+    legacyIntensity: 'medium',
+    labelEn: 'Moderate',
+    labelTi: 'ሚዛናዊ',
+    descriptionEn: 'Balanced, crisp confirmation for everyday gestures.',
+    descriptionTi: 'ንመዓልታዊ ስዋይፕን ጠውቅን ዝተመጣጠነ ንጹር ምንቅጥቃጥ።',
+    swipeThresholdMs: 10,
+    swipeLeftPattern: [14, 18, 26],
+    swipeRightPattern: [24, 16, 12],
+    tabTapMs: 12,
+    bottomNavThudPattern: [18, 14, 34],
+    bottomNavPrimaryThudPattern: [22, 16, 42],
+    boundaryPattern: [18, 32, 18],
+  },
+  strong: {
+    id: 'strong',
+    legacyIntensity: 'crisp',
+    labelEn: 'Strong',
+    labelTi: 'ሓያል',
+    descriptionEn: 'Pronounced, resonant pulse for high-clarity accessibility.',
+    descriptionTi: 'ንልዑል ተበጻሕነት ዝኸውን ሓያልን ንጹርን ድርብ ምንቅጥቃጥ።',
+    swipeThresholdMs: 16,
+    swipeLeftPattern: [22, 16, 40],
+    swipeRightPattern: [38, 16, 20],
+    tabTapMs: 18,
+    bottomNavThudPattern: [28, 14, 52],
+    bottomNavPrimaryThudPattern: [34, 16, 62],
+    boundaryPattern: [28, 28, 28],
+  },
+};
+
+export function intensityToPatternPreset(intensity?: string): HapticPatternIntensity {
+  if (intensity === 'subtle' || intensity === 'light') return 'subtle';
+  if (intensity === 'strong' || intensity === 'crisp') return 'strong';
+  return 'moderate';
+}
+
+export function patternPresetToIntensity(preset: HapticPatternIntensity): HapticIntensity {
+  return HAPTIC_PATTERN_PROFILES[preset].legacyIntensity;
+}
 
 /**
  * Mirrors `android.view.HapticFeedbackConstants` integer identifiers so hybrid
@@ -41,11 +118,21 @@ export const VIBRATE_PATTERN = {
   LONG_PRESS_THUD: [26, 12, 38] as readonly number[],
 } as const;
 
+export const MIN_SWIPE_THRESHOLD_PX = 24;
+export const MAX_SWIPE_THRESHOLD_PX = 140;
+export const DEFAULT_SWIPE_THRESHOLD_PX = 50;
+
 export interface HapticSettings {
   enabled: boolean;
   swipeGesturesEnabled: boolean;
   tabTapsEnabled: boolean;
+  /** Play subtle audio 'snap'/'click' synced with committed swipe tab transitions */
+  audioFeedbackEnabled: boolean;
   intensity: HapticIntensity;
+  /** Named vibration pattern profile (Subtle, Moderate, Strong) for swipes and tab transitions */
+  patternPreset: HapticPatternIntensity;
+  /** Horizontal drag distance in px required to trigger swipe detent & tab transition */
+  swipeThresholdPx: number;
 }
 
 export interface HapticPulseDetail {
@@ -79,8 +166,16 @@ const DEFAULT_SETTINGS: HapticSettings = {
   enabled: true,
   swipeGesturesEnabled: true,
   tabTapsEnabled: true,
+  audioFeedbackEnabled: true,
   intensity: 'medium',
+  patternPreset: 'moderate',
+  swipeThresholdPx: DEFAULT_SWIPE_THRESHOLD_PX,
 };
+
+export function clampSwipeThresholdPx(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_SWIPE_THRESHOLD_PX;
+  return Math.min(MAX_SWIPE_THRESHOLD_PX, Math.max(MIN_SWIPE_THRESHOLD_PX, Math.round(value)));
+}
 
 const INTENSITY_MULTIPLIER: Record<HapticIntensity, number> = {
   light: 0.72,
@@ -119,6 +214,17 @@ export function getHapticSettings(): HapticSettings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw);
+    const resolvedIntensity: HapticIntensity =
+      parsed.intensity === 'light' || parsed.intensity === 'medium' || parsed.intensity === 'crisp'
+        ? parsed.intensity
+        : DEFAULT_SETTINGS.intensity;
+    const resolvedPreset: HapticPatternIntensity =
+      parsed.patternPreset === 'subtle' ||
+      parsed.patternPreset === 'moderate' ||
+      parsed.patternPreset === 'strong'
+        ? parsed.patternPreset
+        : intensityToPatternPreset(resolvedIntensity);
+
     return {
       enabled: typeof parsed.enabled === 'boolean' ? parsed.enabled : DEFAULT_SETTINGS.enabled,
       swipeGesturesEnabled:
@@ -129,18 +235,49 @@ export function getHapticSettings(): HapticSettings {
         typeof parsed.tabTapsEnabled === 'boolean'
           ? parsed.tabTapsEnabled
           : DEFAULT_SETTINGS.tabTapsEnabled,
-      intensity:
-        parsed.intensity === 'light' || parsed.intensity === 'medium' || parsed.intensity === 'crisp'
-          ? parsed.intensity
-          : DEFAULT_SETTINGS.intensity,
+      audioFeedbackEnabled:
+        typeof parsed.audioFeedbackEnabled === 'boolean'
+          ? parsed.audioFeedbackEnabled
+          : DEFAULT_SETTINGS.audioFeedbackEnabled,
+      intensity: patternPresetToIntensity(resolvedPreset),
+      patternPreset: resolvedPreset,
+      swipeThresholdPx:
+        typeof parsed.swipeThresholdPx === 'number'
+          ? clampSwipeThresholdPx(parsed.swipeThresholdPx)
+          : DEFAULT_SETTINGS.swipeThresholdPx,
     };
   } catch {
     return DEFAULT_SETTINGS;
   }
 }
 
+export function getSwipeThresholdPx(): number {
+  return getHapticSettings().swipeThresholdPx;
+}
+
 export function saveHapticSettings(partial: Partial<HapticSettings>): HapticSettings {
-  const next = { ...getHapticSettings(), ...partial };
+  const current = getHapticSettings();
+  let nextPreset: HapticPatternIntensity = current.patternPreset;
+  let nextIntensity: HapticIntensity = current.intensity;
+
+  if (partial.patternPreset) {
+    nextPreset = intensityToPatternPreset(partial.patternPreset);
+    nextIntensity = patternPresetToIntensity(nextPreset);
+  } else if (partial.intensity) {
+    nextPreset = intensityToPatternPreset(partial.intensity);
+    nextIntensity = patternPresetToIntensity(nextPreset);
+  }
+
+  const merged = {
+    ...current,
+    ...partial,
+    patternPreset: nextPreset,
+    intensity: nextIntensity,
+  };
+  const next: HapticSettings = {
+    ...merged,
+    swipeThresholdPx: clampSwipeThresholdPx(merged.swipeThresholdPx),
+  };
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -182,7 +319,8 @@ export function triggerHapticPattern(
   rawPattern: number | readonly number[],
   kind: HapticPulseDetail['kind'] = 'custom',
   minCooldownMs = 24,
-  feedbackConstant?: number
+  feedbackConstant?: number,
+  skipIntensityScaling = false
 ): boolean {
   const settings = getHapticSettings();
   const supported = isVibrationApiSupported();
@@ -208,7 +346,9 @@ export function triggerHapticPattern(
   }
   lastPulseTimestamp = now;
 
-  const scaled = scalePattern(rawPattern, settings.intensity);
+  const scaled = skipIntensityScaling
+    ? normalizedPattern
+    : scalePattern(rawPattern, settings.intensity);
   let triggered = false;
 
   try {
@@ -270,8 +410,8 @@ export function triggerHapticPattern(
 }
 
 /**
- * Triggers Android `HapticFeedbackConstants.LONG_PRESS` paired with `VIBRATE_PATTERN`
- * to deliver a weighted, premium tactile "thud" for BottomNav tab navigation handlers.
+ * Triggers Android `HapticFeedbackConstants.LONG_PRESS` paired with the active pattern preset
+ * to deliver a weighted, tactile "thud" for BottomNav tab navigation handlers.
  */
 export function triggerBottomNavLuxuryThud(options?: {
   feedbackConstant?: number;
@@ -281,14 +421,29 @@ export function triggerBottomNavLuxuryThud(options?: {
   const settings = getHapticSettings();
   if (!settings.enabled || !settings.tabTapsEnabled) return false;
 
+  const profile = HAPTIC_PATTERN_PROFILES[settings.patternPreset];
   const feedbackConstant = options?.feedbackConstant ?? HapticFeedbackConstants.LONG_PRESS;
-  const pattern =
-    options?.pattern ??
-    (options?.isPrimaryAction
-      ? VIBRATE_PATTERN.BOTTOM_NAV_PRIMARY_THUD
-      : VIBRATE_PATTERN.BOTTOM_NAV_THUD);
+  const usesStandardThud =
+    !options?.pattern ||
+    options.pattern === VIBRATE_PATTERN.BOTTOM_NAV_THUD ||
+    options.pattern === VIBRATE_PATTERN.BOTTOM_NAV_PRIMARY_THUD;
+  const isPrimary =
+    Boolean(options?.isPrimaryAction) ||
+    options?.pattern === VIBRATE_PATTERN.BOTTOM_NAV_PRIMARY_THUD;
 
-  return triggerHapticPattern(pattern, 'bottom-nav-thud', 24, feedbackConstant);
+  const pattern = usesStandardThud
+    ? isPrimary
+      ? profile.bottomNavPrimaryThudPattern
+      : profile.bottomNavThudPattern
+    : options!.pattern!;
+
+  return triggerHapticPattern(
+    pattern,
+    'bottom-nav-thud',
+    24,
+    feedbackConstant,
+    usesStandardThud
+  );
 }
 
 /**
@@ -298,19 +453,28 @@ export function triggerBottomNavLuxuryThud(options?: {
 export function triggerSwipeThresholdHaptic(): boolean {
   const settings = getHapticSettings();
   if (!settings.enabled || !settings.swipeGesturesEnabled) return false;
-  return triggerHapticPattern(10, 'swipe-threshold', 60);
+  const profile = HAPTIC_PATTERN_PROFILES[settings.patternPreset];
+  return triggerHapticPattern(profile.swipeThresholdMs, 'swipe-threshold', 60, undefined, true);
 }
 
 /**
  * Directional tactile confirmation pulse when a swipe gesture completes a tab/screen switch.
- * - Left swipe (next tab): crisp ascending double-tap [14, 18, 26]
- * - Right swipe (prev tab): crisp settling double-tap [24, 16, 12]
  */
 export function triggerSwipeTransitionHaptic(direction: 'left' | 'right'): boolean {
   const settings = getHapticSettings();
   if (!settings.enabled || !settings.swipeGesturesEnabled) return false;
-  const pattern = direction === 'left' ? [14, 18, 26] : [24, 16, 12];
-  return triggerHapticPattern(pattern, direction === 'left' ? 'swipe-left' : 'swipe-right', 30);
+  if (settings.audioFeedbackEnabled) {
+    playHapticSnapClick(direction, settings.intensity);
+  }
+  const profile = HAPTIC_PATTERN_PROFILES[settings.patternPreset];
+  const pattern = direction === 'left' ? profile.swipeLeftPattern : profile.swipeRightPattern;
+  return triggerHapticPattern(
+    pattern,
+    direction === 'left' ? 'swipe-left' : 'swipe-right',
+    30,
+    undefined,
+    true
+  );
 }
 
 /**
@@ -319,7 +483,8 @@ export function triggerSwipeTransitionHaptic(direction: 'left' | 'right'): boole
 export function triggerTabTapHaptic(): boolean {
   const settings = getHapticSettings();
   if (!settings.enabled || !settings.tabTapsEnabled) return false;
-  return triggerHapticPattern(12, 'tab-tap', 25);
+  const profile = HAPTIC_PATTERN_PROFILES[settings.patternPreset];
+  return triggerHapticPattern(profile.tabTapMs, 'tab-tap', 25, undefined, true);
 }
 
 /**
@@ -328,7 +493,8 @@ export function triggerTabTapHaptic(): boolean {
 export function triggerBoundaryBumpHaptic(): boolean {
   const settings = getHapticSettings();
   if (!settings.enabled) return false;
-  return triggerHapticPattern([18, 32, 18], 'boundary', 40);
+  const profile = HAPTIC_PATTERN_PROFILES[settings.patternPreset];
+  return triggerHapticPattern(profile.boundaryPattern, 'boundary', 40, undefined, true);
 }
 
 /**

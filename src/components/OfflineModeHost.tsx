@@ -2,6 +2,7 @@ import React, { Suspense, useEffect } from 'react';
 import { WifiOff, RefreshCw } from 'lucide-react';
 import { LazyChunkErrorBoundary, lazyWithRetry } from './LazyChunkBoundary';
 import { useNetwork } from '../context/NetworkContext';
+import { useBatterySaver } from '../context/BatterySaverContext';
 import { useSavedInsights } from '../context/SavedInsightsContext';
 import { useAppActions } from '../context/AppNavigationContext';
 
@@ -20,9 +21,10 @@ interface OfflineModeHostProps {
  */
 export const OfflineDashboardPrefetcher: React.FC = () => {
   const { isOnline } = useNetwork();
+  const { isPowerSavingActive } = useBatterySaver();
 
   useEffect(() => {
-    if (!isOnline || typeof window === 'undefined') return;
+    if (!isOnline || isPowerSavingActive || typeof window === 'undefined') return;
 
     const prefetch = () => {
       void loadOfflineModeDashboard().catch(() => {
@@ -42,7 +44,7 @@ export const OfflineDashboardPrefetcher: React.FC = () => {
 
     const timer = window.setTimeout(prefetch, 2500);
     return () => window.clearTimeout(timer);
-  }, [isOnline]);
+  }, [isOnline, isPowerSavingActive]);
 
   return null;
 };

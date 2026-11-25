@@ -88,6 +88,10 @@ dependencies {
     // OneSignal Push Notifications
     implementation(libs.onesignal)
 
+    // Google Mobile Ads (GMA Next-Gen SDK) & Coroutines
+    implementation("com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.7.0")
+    implementation(libs.kotlinx.coroutines.android)
+
     // Unit Testing (JUnit 4, MockK, Coroutines Test)
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

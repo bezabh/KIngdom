@@ -50,6 +50,8 @@ export interface PayPalPublicConfig {
 
 let cachedPayPalSdkPromise: Promise<PayPalNamespace | null> | null = null;
 let cachedSdkKey = '';
+let cachedPayPalConfigPromise: Promise<PayPalPublicConfig> | null = null;
+let cachedPayPalConfigAt = 0;
 
 export async function authorizedPayPalFetch<T = any>(
   url: string,
@@ -79,11 +81,24 @@ export async function authorizedPayPalFetch<T = any>(
 }
 
 export async function fetchPayPalPublicConfig(): Promise<PayPalPublicConfig> {
-  const res = await fetch('/api/paypal/config');
-  if (!res.ok) {
-    throw new Error(`PayPal config unavailable (HTTP ${res.status})`);
+  const now = Date.now();
+  if (cachedPayPalConfigPromise && now - cachedPayPalConfigAt < 30_000) {
+    return cachedPayPalConfigPromise;
   }
-  return (await res.json()) as PayPalPublicConfig;
+  cachedPayPalConfigAt = now;
+  cachedPayPalConfigPromise = fetch('/api/paypal/config')
+    .then(async (res) => {
+      if (!res.ok) {
+        throw new Error(`PayPal config unavailable (HTTP ${res.status})`);
+      }
+      return (await res.json()) as PayPalPublicConfig;
+    })
+    .catch((err) => {
+      cachedPayPalConfigPromise = null;
+      cachedPayPalConfigAt = 0;
+      throw err;
+    });
+  return cachedPayPalConfigPromise;
 }
 
 /**
