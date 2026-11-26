@@ -49,6 +49,14 @@ import {
   type PayPalWebhookHeaders,
 } from "./src/server/paypalEngine.ts";
 import {
+  getPublicStripeConfig,
+  createStripeMonthlyCheckoutSession,
+  verifyStripeCheckoutSession,
+  cancelStripeSubscription,
+  processStripeWebhookEvent,
+  isStripeConfigured,
+} from "./src/server/stripeEngine.ts";
+import {
   getSuperAdminOverview,
   getSuperAdminAiServices,
   testAiModelPing,
@@ -197,7 +205,9 @@ app.use("/api", (req, res, next) => {
     req.path === "/health" ||
     req.path === "/ready" ||
     req.path === "/paypal/webhook" ||
-    req.path === "/paypal/config"
+    req.path === "/paypal/config" ||
+    req.path === "/stripe/webhook" ||
+    req.path === "/stripe/config"
   ) {
     return next();
   }
@@ -2154,6 +2164,41 @@ function resolvePayPalRedirectUrls(req: express.Request) {
   };
 }
 
+// Helper: Resolve trusted caller origin for Stripe Checkout redirects
+function isTrustedRedirectOrigin(candidate: string, envOrigin: string): boolean {
+  if (!/^https?:\/\//i.test(candidate)) return false;
+  try {
+    const parsed = new URL(candidate);
+    if (envOrigin && candidate === envOrigin) return true;
+    if (ALLOWED_ORIGINS.includes(candidate)) return true;
+    const host = parsed.hostname.toLowerCase();
+    return (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".run.app")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resolveStripeRedirectUrls(req: express.Request) {
+  const envOrigin = (process.env.APP_URL || "").trim().replace(/\/+$/, "");
+  const headerOrigin = ((req.headers.origin as string) || "").trim().replace(/\/+$/, "");
+  const hostHeader = req.get("host") || "";
+  const hostOrigin = hostHeader ? `${req.protocol}://${hostHeader}` : "";
+  const baseOrigin =
+    (envOrigin && envOrigin !== "MY_APP_URL" && /^https?:\/\//i.test(envOrigin) && envOrigin) ||
+    (isTrustedRedirectOrigin(headerOrigin, envOrigin) && headerOrigin) ||
+    (isTrustedRedirectOrigin(hostOrigin, envOrigin) && hostOrigin) ||
+    "https://ais-dev-wokrypub577oqnqnu7ex7r-144122054185.europe-west1.run.app";
+
+  return {
+    successUrl: `${baseOrigin}/?stripe_status=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: `${baseOrigin}/?stripe_status=cancelled`,
+  };
+}
+
 // 6.0 Public PayPal Configuration (NEVER exposes Client Secret or Webhook ID)
 app.get("/api/paypal/config", async (_req, res) => {
   try {
@@ -2161,6 +2206,131 @@ app.get("/api/paypal/config", async (_req, res) => {
     return res.json(getPublicPayPalConfig());
   } catch (err: any) {
     return res.json(getPublicPayPalConfig());
+  }
+});
+
+// 6.0b Public Stripe Configuration & €19.90/month Plan Metadata (NEVER exposes Secret Key or Webhook Secret)
+app.get("/api/stripe/config", (_req, res) => {
+  return res.json(getPublicStripeConfig());
+});
+
+// 6.0c Create Stripe Checkout Session for Monthly Subscription (€19.90 / month)
+app.post("/api/stripe/create-checkout-session", async (req, res) => {
+  try {
+    const caller = await verifyFirebaseCaller(req);
+    if (!caller.authenticated) {
+      return res.status(401).json({
+        error:
+          caller.authError ||
+          "Authentication required. Please sign in with Google/Firebase before subscribing with Stripe.",
+      });
+    }
+
+    if (!isStripeConfigured()) {
+      return res.status(503).json({
+        success: false,
+        configured: false,
+        error:
+          "Stripe is not configured on the server yet. Add STRIPE_SECRET_KEY in environment secrets to launch €19.90/month Stripe Checkout.",
+      });
+    }
+
+    const { successUrl, cancelUrl } = resolveStripeRedirectUrls(req);
+    const session = await createStripeMonthlyCheckoutSession({
+      uid: caller.uid,
+      email: caller.email,
+      displayName: caller.displayName,
+      successUrl,
+      cancelUrl,
+    });
+
+    return res.json(session);
+  } catch (error: any) {
+    console.error("Error in /api/stripe/create-checkout-session:", error);
+    return res.status(400).json({
+      success: false,
+      error: error?.message || "Failed to create Stripe Checkout session.",
+    });
+  }
+});
+
+// 6.0d Verify Stripe Checkout Session Server-Side & Activate Pro Entitlement
+app.post("/api/stripe/verify-session", async (req, res) => {
+  try {
+    const caller = await verifyFirebaseCaller(req);
+    if (!caller.authenticated) {
+      return res.status(401).json({
+        error: caller.authError || "Firebase ID token is required.",
+      });
+    }
+
+    const sessionId = String(req.body?.sessionId || "").trim();
+    if (!sessionId || !sessionId.startsWith("cs_")) {
+      return res.status(400).json({ error: "A valid Stripe Checkout sessionId is required." });
+    }
+
+    const result = await verifyStripeCheckoutSession({
+      uid: caller.uid,
+      email: caller.email,
+      displayName: caller.displayName,
+      sessionId,
+    });
+
+    return res.json(result);
+  } catch (error: any) {
+    console.error("Error in /api/stripe/verify-session:", error);
+    return res.status(400).json({
+      success: false,
+      error: error?.message || "Stripe session verification failed.",
+    });
+  }
+});
+
+// 6.0e Cancel Stripe Monthly Subscription (Paid-Through Period Retained)
+app.post("/api/stripe/cancel-subscription", async (req, res) => {
+  try {
+    const caller = await verifyFirebaseCaller(req);
+    if (!caller.authenticated) {
+      return res.status(401).json({
+        error: caller.authError || "Firebase ID token is required.",
+      });
+    }
+
+    const subscriptionId = req.body?.subscriptionId
+      ? String(req.body.subscriptionId).trim()
+      : undefined;
+    const reason = req.body?.reason
+      ? String(req.body.reason).slice(0, 240)
+      : undefined;
+
+    const result = await cancelStripeSubscription({
+      uid: caller.uid,
+      subscriptionId,
+      reason,
+    });
+
+    return res.json(result);
+  } catch (error: any) {
+    console.error("Error in /api/stripe/cancel-subscription:", error);
+    return res.status(400).json({
+      success: false,
+      error: error?.message || "Failed to cancel Stripe subscription.",
+    });
+  }
+});
+
+// 6.0f Official Stripe Webhook Handler (Signature-Verified & Idempotent)
+app.post("/api/stripe/webhook", async (req, res) => {
+  try {
+    const rawBody = (req as express.Request & { rawBody?: Buffer }).rawBody;
+    const signature = req.headers["stripe-signature"] as string | undefined;
+    const result = await processStripeWebhookEvent({ rawBody, signature });
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error("Error in /api/stripe/webhook:", error?.message || error);
+    return res.status(400).json({
+      error: error?.message || "Stripe webhook verification failed.",
+    });
   }
 });
 

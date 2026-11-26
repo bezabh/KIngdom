@@ -4,8 +4,14 @@ import android.app.Application
 import android.util.Log
 import com.onesignal.OneSignal
 import com.onesignal.debug.LogLevel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class AxumiteApplication : Application() {
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
@@ -13,7 +19,13 @@ class AxumiteApplication : Application() {
         Log.i(TAG, "Axumite AI Sovereign Android App (Kotlin 2.0 / Jetpack Compose) initialized.")
 
         initOneSignal()
-        AdMobInitializer.initialize(this)
+        initializeAdMobOnce()
+    }
+
+    private fun initializeAdMobOnce() {
+        applicationScope.launch {
+            AdMobInitializer.initialize(this@AxumiteApplication)
+        }
     }
 
     private fun initOneSignal() {

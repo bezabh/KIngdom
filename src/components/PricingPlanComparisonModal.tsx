@@ -30,10 +30,10 @@ export const PricingPlanComparisonModal: React.FC<PricingPlanComparisonModalProp
             </div>
             <div>
               <h2 className="text-lg font-bold font-cinzel text-white">
-                {language === 'ti' ? 'ፕላናትን ክፍሊት PayPalን' : 'Axumite Pro Plans & PayPal Checkout'}
+                {language === 'ti' ? 'ፕላናትን ክፍሊት Stripeን PayPalን' : 'Axumite Pro Plans & Checkout (Stripe & PayPal)'}
               </h2>
               <p className="text-xs text-slate-400">
-                Monthly (€9.99/mo) & Yearly (€79.99/yr) PayPal recurring subscriptions
+                Stripe Monthly (€19.90/mo) & PayPal Monthly/Yearly recurring subscriptions
               </p>
             </div>
           </div>

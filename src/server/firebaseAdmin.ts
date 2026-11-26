@@ -222,7 +222,7 @@ export interface FirestoreUserRecord {
 
 export interface FirestoreSubscriptionRecord {
   uid: string;
-  provider: "paypal";
+  provider: "paypal" | "stripe";
   paypalSubscriptionId: string;
   paypalPlanId: string;
   planType: "pro_monthly" | "pro_yearly";
@@ -238,7 +238,7 @@ export interface FirestoreSubscriptionRecord {
 
 export interface FirestorePaymentHistoryRecord {
   uid: string;
-  provider: "paypal";
+  provider: "paypal" | "stripe";
   paypalTransactionId: string;
   paypalSubscriptionId: string;
   amount: number;

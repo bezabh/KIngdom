@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Crown, Check, ArrowRight, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Crown, Check, ArrowRight, ShieldCheck, CreditCard } from 'lucide-react';
 import { useSubscription } from '../context/SubscriptionContext';
 import { useLanguage } from '../context/LanguageContext';
 
@@ -10,17 +10,47 @@ interface SubscriptionGateModalProps {
 export const SubscriptionGateModal: React.FC<SubscriptionGateModalProps> = ({
   onOpenPricingPlans,
 }) => {
-  const { activePaywallFeature, closePaywall, paypalConfig } = useSubscription();
+  const {
+    activePaywallFeature,
+    closePaywall,
+    paypalConfig,
+    stripeConfig,
+    createStripeMonthlyCheckout,
+  } = useSubscription();
   const { language } = useLanguage();
+  const [isStripeStarting, setIsStripeStarting] = useState(false);
+  const [stripeError, setStripeError] = useState<string | null>(null);
 
   if (!activePaywallFeature) return null;
 
   const monthly = paypalConfig.plans.pro_monthly;
   const yearly = paypalConfig.plans.pro_yearly;
+  const stripeMonthlyAmount = stripeConfig.monthlyPlan.amount.toFixed(2);
 
   const handleUpgradeClick = () => {
+    setStripeError(null);
     closePaywall();
     onOpenPricingPlans();
+  };
+
+  const handleStripeMonthlyClick = async () => {
+    setIsStripeStarting(true);
+    setStripeError(null);
+    try {
+      const res = await createStripeMonthlyCheckout();
+      if (res.success && res.checkoutUrl && res.checkoutUrl.startsWith('https://')) {
+        window.location.assign(res.checkoutUrl);
+        return;
+      }
+      if (res.error?.toLowerCase().includes('sign in') || res.error?.toLowerCase().includes('auth')) {
+        closePaywall();
+        onOpenPricingPlans();
+        return;
+      }
+      setStripeError(res.error || 'Could not start Stripe monthly checkout. Please open full billing options.');
+    } finally {
+      setIsStripeStarting(false);
+    }
   };
 
   return (
@@ -43,7 +73,7 @@ export const SubscriptionGateModal: React.FC<SubscriptionGateModalProps> = ({
           </div>
 
           <span className="inline-block px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-300 border border-amber-500/30 mb-2">
-            AXUMITE PRO • PAYPAL SUBSCRIPTION
+            AXUMITE PRO • STRIPE & PAYPAL
           </span>
 
           <h2 className="text-xl sm:text-2xl font-bold font-cinzel text-white leading-tight">
@@ -52,8 +82,8 @@ export const SubscriptionGateModal: React.FC<SubscriptionGateModalProps> = ({
 
           <p className="text-xs sm:text-sm text-slate-300 mt-2 max-w-sm mx-auto leading-relaxed">
             {language === 'ti'
-              ? 'እዚ ፍሉይ መሳርሒ ኣብ Axumite Pro ጥራይ ይርከብ። ብPayPal ብቕጽበት ክፈትዎ።'
-              : `Unlock all 6 Pro translator & AI tools with PayPal (€${monthly.amount.toFixed(2)}/mo or €${yearly.amount.toFixed(2)}/yr).`}
+              ? `እዚ ፍሉይ መሳርሒ ኣብ Axumite Pro ጥራይ ይርከብ። ብStripe (€${stripeMonthlyAmount}/ወርሒ) ወይ PayPal ብቕጽበት ክፈትዎ።`
+              : `Unlock all 6 Pro translator & AI tools with Stripe (€${stripeMonthlyAmount}/mo) or PayPal (€${monthly.amount.toFixed(2)}/mo or €${yearly.amount.toFixed(2)}/yr).`}
           </p>
 
           <div className="bg-[#191826]/80 rounded-2xl p-4 my-5 border border-slate-800 text-left space-y-2 text-xs">
@@ -71,20 +101,44 @@ export const SubscriptionGateModal: React.FC<SubscriptionGateModalProps> = ({
             </div>
             <div className="flex items-center space-x-2.5 text-slate-200">
               <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Verified PayPal Recurring Billing — Cancel Anytime</span>
+              <span>Verified Stripe & PayPal Recurring Billing — Cancel Anytime</span>
             </div>
           </div>
 
+          {stripeError && (
+            <div className="mb-3 rounded-xl bg-rose-950/60 border border-rose-500/40 px-3 py-2 text-xs text-rose-200">
+              {stripeError}
+            </div>
+          )}
+
           <div className="space-y-2.5">
+            <button
+              id="btn-gate-stripe-monthly"
+              type="button"
+              disabled={isStripeStarting}
+              onClick={handleStripeMonthlyClick}
+              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#635BFF] via-[#554CFF] to-[#463DF2] hover:brightness-110 text-white font-bold text-sm shadow-lg transition-all cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-60"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>
+                {isStripeStarting
+                  ? 'Connecting to Stripe...'
+                  : language === 'ti'
+                  ? `ብStripe ናብ PRO ዕበ (€${stripeMonthlyAmount}/ወርሒ)`
+                  : `Subscribe Monthly — €${stripeMonthlyAmount}/mo with Stripe`}
+              </span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
             <button
               type="button"
               onClick={handleUpgradeClick}
-              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-[#003087] via-[#0070BA] to-[#005EA6] hover:brightness-110 text-white font-bold text-sm shadow-lg transition-all cursor-pointer flex items-center justify-center space-x-2"
+              className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-[#003087] via-[#0070BA] to-[#005EA6] hover:brightness-110 text-white font-bold text-xs shadow-lg transition-all cursor-pointer flex items-center justify-center space-x-2"
             >
               <span>
                 {language === 'ti'
                   ? 'ብPayPal ናብ PRO ዕበ'
-                  : `Upgrade to Pro via PayPal (€${monthly.amount.toFixed(2)}/mo)`}
+                  : `Or Upgrade via PayPal (€${monthly.amount.toFixed(2)}/mo)`}
               </span>
               <ArrowRight className="w-4 h-4" />
             </button>
@@ -100,7 +154,7 @@ export const SubscriptionGateModal: React.FC<SubscriptionGateModalProps> = ({
 
           <div className="mt-4 flex items-center justify-center space-x-2 text-[10px] text-slate-500">
             <ShieldCheck className="w-3.5 h-3.5 text-sky-400/80" />
-            <span>Verified PayPal Checkout & Server-Side Entitlements</span>
+            <span>Verified Stripe & PayPal Checkout & Server-Side Entitlements</span>
           </div>
         </div>
       </div>

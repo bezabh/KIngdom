@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Check,
   ShieldCheck,
+  CreditCard,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useSubscription } from '../context/SubscriptionContext';
@@ -38,11 +39,19 @@ export const SaasSubscriptionSystem: React.FC<SaasSubscriptionSystemProps> = ({
   onOpenPricingModal,
 }) => {
   const { language } = useLanguage();
-  const { isProOrHigher, paypalConfig, setSelectedPlanType, openPaywall } = useSubscription();
+  const {
+    isProOrHigher,
+    paypalConfig,
+    stripeConfig,
+    setSelectedPlanType,
+    openPaywall,
+    createStripeMonthlyCheckout,
+  } = useSubscription();
   const isTigrinya = language === 'ti' || language === 'ti_tg';
 
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [userUsage, setUserUsage] = useState<SaasUserRecord | null>(null);
+  const [isStripeStarting, setIsStripeStarting] = useState(false);
   const [actionNotice, setActionNotice] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   const fetchUserUsage = useCallback(async () => {
@@ -81,6 +90,40 @@ export const SaasSubscriptionSystem: React.FC<SaasSubscriptionSystemProps> = ({
     });
   };
 
+  const handleStartStripeMonthly = async () => {
+    if (!user?.isLoggedIn) {
+      if (onOpenPricingModal) {
+        onOpenPricingModal();
+      } else if (onNavigateTab) {
+        onNavigateTab('payment');
+      } else {
+        openPaywall(`Axumite Pro Monthly (€${stripeConfig.monthlyPlan.amount.toFixed(2)}/mo via Stripe)`);
+      }
+      setActionNotice({
+        type: 'info',
+        text: `Sign in to start your €${stripeConfig.monthlyPlan.amount.toFixed(2)}/month Stripe subscription.`,
+      });
+      return;
+    }
+
+    setIsStripeStarting(true);
+    setActionNotice(null);
+    try {
+      const res = await createStripeMonthlyCheckout();
+      if (res.success && res.checkoutUrl && res.checkoutUrl.startsWith('https://')) {
+        window.location.assign(res.checkoutUrl);
+        return;
+      }
+      setActionNotice({
+        type: 'error',
+        text: res.error || 'Unable to start Stripe Checkout right now.',
+      });
+    } finally {
+      setIsStripeStarting(false);
+    }
+  };
+
+  const stripeMonthlyAmount = stripeConfig.monthlyPlan.amount.toFixed(2);
   const monthlyAmount = paypalConfig.plans.pro_monthly.amount.toFixed(2);
   const yearlyAmount = paypalConfig.plans.pro_yearly.amount.toFixed(2);
   const currency = paypalConfig.currency || 'EUR';
@@ -176,7 +219,7 @@ export const SaasSubscriptionSystem: React.FC<SaasSubscriptionSystemProps> = ({
               {billingCycle === 'yearly' ? 'Axumite Pro Yearly' : 'Axumite Pro Monthly'}
             </h4>
             <div className="text-3xl font-black font-mono text-white">
-              {billingCycle === 'yearly' ? yearlyAmount : monthlyAmount} {currency}{' '}
+              {billingCycle === 'yearly' ? yearlyAmount : stripeMonthlyAmount} {currency}{' '}
               <span className="text-xs text-slate-400 font-normal">
                 / {billingCycle === 'yearly' ? 'year' : 'month'}
               </span>
@@ -184,19 +227,45 @@ export const SaasSubscriptionSystem: React.FC<SaasSubscriptionSystemProps> = ({
             <ul className="space-y-2 text-xs text-slate-200 pt-2 border-t border-slate-800">
               <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span>All 6 Pro Translator & AI Studio features unlocked</span></li>
               <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span>Unlimited high-speed Gemini Pro chat</span></li>
-              <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span>Recurring PayPal billing with anytime cancellation</span></li>
+              <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /><span>Recurring Stripe (€{stripeMonthlyAmount}/mo) or PayPal billing — cancel anytime</span></li>
             </ul>
           </div>
 
-          <button
-            type="button"
-            onClick={() => handleGoToPayPal(billingCycle)}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-[#003087] to-[#0070BA] hover:brightness-110 text-white text-xs font-black flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Zap className="w-4 h-4 text-amber-300" />
-            <span>{isProOrHigher ? 'Manage PayPal Plan' : 'Subscribe with PayPal'}</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="space-y-2.5">
+            {billingCycle === 'monthly' && !isProOrHigher && (
+              <button
+                id="btn-saas-stripe-monthly"
+                type="button"
+                disabled={isStripeStarting}
+                onClick={handleStartStripeMonthly}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-[#635BFF] via-[#554CFF] to-[#463DF2] hover:brightness-110 text-white text-xs font-black flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#635BFF]/20 disabled:opacity-60"
+              >
+                <CreditCard className="w-4 h-4" />
+                <span>
+                  {isStripeStarting
+                    ? 'Connecting to Stripe...'
+                    : `Subscribe Monthly (€${stripeMonthlyAmount}/mo) with Stripe`}
+                </span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleGoToPayPal(billingCycle)}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#003087] to-[#0070BA] hover:brightness-110 text-white text-xs font-black flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-amber-300" />
+              <span>
+                {isProOrHigher
+                  ? 'Manage Subscription'
+                  : billingCycle === 'monthly'
+                  ? `Or Subscribe via PayPal (€${monthlyAmount}/mo)`
+                  : 'Subscribe Yearly with PayPal'}
+              </span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

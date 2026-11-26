@@ -10,6 +10,12 @@ import {
   type PayPalPlanType,
   type PayPalPublicConfig,
 } from '../lib/paypalClient';
+import {
+  authorizedStripeFetch,
+  DEFAULT_STRIPE_CONFIG,
+  fetchStripePublicConfig,
+  type StripePublicConfig,
+} from '../lib/stripeClient';
 
 export type SubscriptionTier = 'free' | 'pro';
 export type SubscriptionStatus =
@@ -26,7 +32,7 @@ export type SubscriptionStatus =
   | 'NONE';
 
 export type BillingCycle = 'monthly' | 'yearly' | 'free';
-export type PaymentProviderKind = 'paypal';
+export type PaymentProviderKind = 'paypal' | 'stripe';
 export type ProFeatureKey =
   | 'video_dubbing'
   | 'unlimited_chat'
@@ -49,12 +55,12 @@ export interface InvoiceItem {
   downloadUrl: string;
   vatAmount: number;
   subtotal: number;
-  provider: 'paypal';
+  provider: 'paypal' | 'stripe';
 }
 
 export interface PayPalSubscriptionSnapshot {
   uid: string;
-  provider: 'paypal';
+  provider: 'paypal' | 'stripe';
   paypalSubscriptionId: string;
   paypalPlanId: string;
   planType: PayPalPlanType;
@@ -74,7 +80,7 @@ export interface PayPalSubscriptionSnapshot {
 export interface PayPalPaymentHistoryItem {
   uid: string;
   email: string;
-  provider: 'paypal';
+  provider: 'paypal' | 'stripe';
   paypalTransactionId: string;
   paypalSubscriptionId: string;
   planType: PayPalPlanType;
@@ -111,7 +117,7 @@ export interface SubscriptionState {
   paypalSubscriptionId: string | null;
   paypalPlanId: string | null;
   paymentMethod: {
-    provider: 'paypal';
+    provider: 'paypal' | 'stripe';
     label: string;
   };
   entitlementSignature: string;
@@ -123,6 +129,7 @@ export type PayPalOutcomeView = 'none' | 'confirmed' | 'failed' | 'cancelled';
 interface SubscriptionContextType {
   subscription: SubscriptionState;
   paypalConfig: PayPalPublicConfig;
+  stripeConfig: StripePublicConfig;
   paypalEntitlement: PayPalEntitlementState;
   paypalSubscription: PayPalSubscriptionSnapshot | null;
   billingHistory: PayPalPaymentHistoryItem[];
@@ -163,6 +170,17 @@ interface SubscriptionContextType {
     orderId: string;
     planType?: PayPalPlanType;
   }) => Promise<{ success: boolean; error?: string }>;
+  createStripeMonthlyCheckout: () => Promise<{
+    success: boolean;
+    configured?: boolean;
+    mode?: 'test' | 'live';
+    sessionId?: string;
+    checkoutUrl?: string;
+    amount?: number;
+    currency?: string;
+    error?: string;
+  }>;
+  verifyStripeSession: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
   cancelSubscription: (reason?: string) => Promise<{ success: boolean; error?: string; message?: string }>;
   refreshSubscriptionStatus: () => Promise<boolean>;
   verifyBackendEntitlement: () => Promise<boolean>;
@@ -282,9 +300,11 @@ function mapHistoryToInvoices(history: PayPalPaymentHistoryItem[]): InvoiceItem[
       FAILED: 'FAILED',
       PENDING: 'PENDING',
     };
+    const isStripe = item.provider === 'stripe';
+    const providerPrefix = isStripe ? 'Stripe' : 'PayPal';
     return {
-      id: item.paypalTransactionId || `pp-inv-${idx}`,
-      invoiceNumber: item.paypalTransactionId || `PP-${idx + 1}`,
+      id: item.paypalTransactionId || `inv-${idx}`,
+      invoiceNumber: item.paypalTransactionId || `${isStripe ? 'ST' : 'PP'}-${idx + 1}`,
       orderId: item.paypalSubscriptionId,
       date: new Date(item.paymentDate).toLocaleDateString('en-US', {
         year: 'numeric',
@@ -295,12 +315,12 @@ function mapHistoryToInvoices(history: PayPalPaymentHistoryItem[]): InvoiceItem[
       billingCycle: item.planType === 'pro_yearly' ? 'yearly' : 'monthly',
       amount,
       currency: item.currency || 'EUR',
-      paymentMethod: `PayPal (${item.mode.toUpperCase()})`,
+      paymentMethod: `${providerPrefix} (${item.mode.toUpperCase()})`,
       status: statusMap[item.paymentStatus] || 'PENDING',
-      downloadUrl: `#paypal-receipt-${item.paypalTransactionId}`,
+      downloadUrl: `#receipt-${item.paypalTransactionId}`,
       vatAmount,
       subtotal,
-      provider: 'paypal',
+      provider: isStripe ? 'stripe' : 'paypal',
     };
   });
 }
@@ -330,6 +350,7 @@ export const SubscriptionProvider: React.FC<{
   }, []);
 
   const [paypalConfig, setPayPalConfig] = useState<PayPalPublicConfig>(DEFAULT_PAYPAL_CONFIG);
+  const [stripeConfig, setStripeConfig] = useState<StripePublicConfig>(DEFAULT_STRIPE_CONFIG);
   const [paypalEntitlement, setPayPalEntitlement] = useState<PayPalEntitlementState>(DEFAULT_ENTITLEMENT);
   const [paypalSubscription, setPayPalSubscription] = useState<PayPalSubscriptionSnapshot | null>(null);
   const [billingHistory, setBillingHistory] = useState<PayPalPaymentHistoryItem[]>([]);
@@ -408,6 +429,11 @@ export const SubscriptionProvider: React.FC<{
         if (active) setPayPalConfig(cfg);
       })
       .catch(() => {});
+    fetchStripePublicConfig()
+      .then((cfg) => {
+        if (active) setStripeConfig(cfg);
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -417,20 +443,53 @@ export const SubscriptionProvider: React.FC<{
     void refreshSubscriptionStatus();
   }, [user?.id, user?.email, user?.isLoggedIn, refreshSubscriptionStatus]);
 
-  // Handle PayPal redirect return parameters (`?paypal_status=success&subscription_id=...` or `&token=...` for Orders v2)
+  // Handle PayPal & Stripe redirect return parameters
   useEffect(() => {
     if (typeof window === 'undefined' || !user?.isLoggedIn) return;
     const urlParams = new URLSearchParams(window.location.search);
     const ppStatus = urlParams.get('paypal_status');
-    if (!ppStatus) return;
-
-    const subscriptionId = urlParams.get('subscription_id');
-    const orderToken = urlParams.get('token');
+    const stripeStatus = urlParams.get('stripe_status');
+    const stripeSessionId = urlParams.get('session_id');
 
     const cleanUrl = () => {
       const nextUrl = window.location.pathname + (window.location.hash || '');
       window.history.replaceState({}, document.title, nextUrl);
     };
+
+    if (stripeStatus === 'cancelled') {
+      setPayPalOutcomeView('cancelled');
+      setLastPaymentError('Stripe checkout was cancelled before payment completed.');
+      cleanUrl();
+      return;
+    }
+
+    if (stripeStatus === 'success' && stripeSessionId) {
+      void authorizedStripeFetch('/api/stripe/verify-session', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId: stripeSessionId }),
+      })
+        .then(({ ok, data }) => {
+          if (ok && data?.success) {
+            applyServerSnapshot(data);
+            setPayPalOutcomeView(data.entitlement?.isPro ? 'confirmed' : 'failed');
+            if (!data.entitlement?.isPro) {
+              setLastPaymentError('Stripe subscription could not be confirmed yet.');
+            } else {
+              setLastPaymentError(null);
+            }
+          } else {
+            setPayPalOutcomeView('failed');
+            setLastPaymentError(data?.error || 'Could not verify Stripe Checkout session.');
+          }
+        })
+        .finally(cleanUrl);
+      return;
+    }
+
+    if (!ppStatus) return;
+
+    const subscriptionId = urlParams.get('subscription_id');
+    const orderToken = urlParams.get('token');
 
     if (ppStatus === 'cancelled') {
       setPayPalOutcomeView('cancelled');
@@ -593,10 +652,80 @@ export const SubscriptionProvider: React.FC<{
     [applyServerSnapshot]
   );
 
+  const createStripeMonthlyCheckout = useCallback(async () => {
+    setLastPaymentError(null);
+    const token = await getFirebaseIdToken();
+    if (!token) {
+      const msg = 'Please sign in with Google/Firebase before starting a Stripe monthly subscription.';
+      setLastPaymentError(msg);
+      return { success: false, error: msg };
+    }
+
+    const { ok, data } = await authorizedStripeFetch('/api/stripe/create-checkout-session', {
+      method: 'POST',
+      body: JSON.stringify({ planType: 'pro_monthly' }),
+    });
+
+    if (!ok || !data?.success) {
+      const msg = data?.error || 'Failed to initiate Stripe monthly checkout.';
+      setLastPaymentError(msg);
+      return {
+        success: false,
+        configured: data?.configured,
+        error: msg,
+      };
+    }
+
+    return {
+      success: true,
+      configured: true,
+      mode: data.mode,
+      sessionId: data.sessionId,
+      checkoutUrl: data.checkoutUrl,
+      amount: data.amount,
+      currency: data.currency,
+    };
+  }, []);
+
+  const verifyStripeSession = useCallback(
+    async (sessionId: string): Promise<{ success: boolean; error?: string }> => {
+      setLastPaymentError(null);
+      const { ok, data } = await authorizedStripeFetch('/api/stripe/verify-session', {
+        method: 'POST',
+        body: JSON.stringify({ sessionId }),
+      });
+
+      if (!ok || !data?.success) {
+        const msg = data?.error || 'Stripe session verification failed.';
+        setLastPaymentError(msg);
+        setPayPalOutcomeView('failed');
+        return { success: false, error: msg };
+      }
+
+      applyServerSnapshot(data);
+      if (data.entitlement?.isPro) {
+        setPayPalOutcomeView('confirmed');
+        setActivePaywallFeature(null);
+        return { success: true };
+      }
+
+      const msg = `Subscription status is ${data.subscription?.status || 'NOT_ACTIVE'}.`;
+      setLastPaymentError(msg);
+      setPayPalOutcomeView('failed');
+      return { success: false, error: msg };
+    },
+    [applyServerSnapshot]
+  );
+
   const cancelSubscription = useCallback(
     async (reason: string = 'User requested cancellation'): Promise<{ success: boolean; error?: string; message?: string }> => {
       setLastPaymentError(null);
-      const { ok, data } = await authorizedPayPalFetch('/api/paypal/cancel-subscription', {
+      const isStripeSub = paypalSubscription?.provider === 'stripe';
+      const endpoint = isStripeSub
+        ? '/api/stripe/cancel-subscription'
+        : '/api/paypal/cancel-subscription';
+      const fetcher = isStripeSub ? authorizedStripeFetch : authorizedPayPalFetch;
+      const { ok, data } = await fetcher(endpoint, {
         method: 'POST',
         body: JSON.stringify({
           subscriptionId: paypalSubscription?.paypalSubscriptionId,
@@ -605,7 +734,7 @@ export const SubscriptionProvider: React.FC<{
       });
 
       if (!ok || !data?.success) {
-        const msg = data?.error || 'Failed to cancel PayPal subscription.';
+        const msg = data?.error || 'Failed to cancel subscription.';
         setLastPaymentError(msg);
         return { success: false, error: msg };
       }
@@ -613,7 +742,7 @@ export const SubscriptionProvider: React.FC<{
       applyServerSnapshot(data);
       return { success: true, message: data.message };
     },
-    [paypalSubscription?.paypalSubscriptionId, applyServerSnapshot]
+    [paypalSubscription?.paypalSubscriptionId, paypalSubscription?.provider, applyServerSnapshot]
   );
 
   const subscription = useMemo<SubscriptionState>(() => {
@@ -629,6 +758,7 @@ export const SubscriptionProvider: React.FC<{
     const formattedRenew = nextIso
       ? new Date(nextIso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       : 'Never';
+    const activeProvider = paypalSubscription?.provider === 'stripe' ? 'stripe' : 'paypal';
 
     return {
       tier: paypalEntitlement.isPro ? 'pro' : 'free',
@@ -638,7 +768,11 @@ export const SubscriptionProvider: React.FC<{
         paypalSubscription?.cancelAtPeriodEnd
       ),
       billingCycle: planType === 'pro_yearly' ? 'yearly' : 'monthly',
-      amount: paypalSubscription?.amount ?? (planType === 'pro_yearly' ? paypalConfig.plans.pro_yearly.amount : paypalConfig.plans.pro_monthly.amount),
+      amount:
+        paypalSubscription?.amount ??
+        (planType === 'pro_yearly'
+          ? paypalConfig.plans.pro_yearly.amount
+          : paypalConfig.plans.pro_monthly.amount),
       currency: ((paypalSubscription?.currency || paypalConfig.currency || 'EUR') as SupportedCurrency),
       startedAt: paypalSubscription?.startDate || paypalEntitlement.updatedAt,
       renewsAt: formattedRenew,
@@ -648,13 +782,16 @@ export const SubscriptionProvider: React.FC<{
       paypalSubscriptionId: paypalSubscription?.paypalSubscriptionId || null,
       paypalPlanId: paypalSubscription?.paypalPlanId || null,
       paymentMethod: {
-        provider: 'paypal',
-        label: `PayPal (${(paypalSubscription?.mode || paypalConfig.mode).toUpperCase()})`,
+        provider: activeProvider,
+        label:
+          activeProvider === 'stripe'
+            ? `Stripe (${stripeConfig.mode.toUpperCase()})`
+            : `PayPal (${(paypalSubscription?.mode || paypalConfig.mode).toUpperCase()})`,
       },
       entitlementSignature: paypalEntitlement.entitlementSignature,
       invoices: mapHistoryToInvoices(billingHistory),
     };
-  }, [paypalSubscription, paypalEntitlement, paypalConfig, billingHistory]);
+  }, [paypalSubscription, paypalEntitlement, paypalConfig, stripeConfig.mode, billingHistory]);
 
   const hasVerifiedAdminPrivilege = Boolean(user?.isLoggedIn) && isAdminOrCreator(user);
   const notExpired =
@@ -711,6 +848,7 @@ export const SubscriptionProvider: React.FC<{
     () => ({
       subscription,
       paypalConfig,
+      stripeConfig,
       paypalEntitlement,
       paypalSubscription,
       billingHistory,
@@ -730,6 +868,8 @@ export const SubscriptionProvider: React.FC<{
       createPayPalCheckout,
       verifyPayPalSubscription,
       capturePayPalOrder,
+      createStripeMonthlyCheckout,
+      verifyStripeSession,
       cancelSubscription,
       refreshSubscriptionStatus,
       verifyBackendEntitlement: refreshSubscriptionStatus,
@@ -741,6 +881,7 @@ export const SubscriptionProvider: React.FC<{
     [
       subscription,
       paypalConfig,
+      stripeConfig,
       paypalEntitlement,
       paypalSubscription,
       billingHistory,
@@ -758,6 +899,8 @@ export const SubscriptionProvider: React.FC<{
       createPayPalCheckout,
       verifyPayPalSubscription,
       capturePayPalOrder,
+      createStripeMonthlyCheckout,
+      verifyStripeSession,
       cancelSubscription,
       refreshSubscriptionStatus,
       restorePurchases,

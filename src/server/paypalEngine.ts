@@ -56,7 +56,7 @@ export interface PayPalSubscriptionRecord {
   uid: string;
   email: string;
   displayName: string;
-  provider: "paypal";
+  provider: "paypal" | "stripe";
   paypalSubscriptionId: string;
   paypalPlanId: string;
   planType: PayPalPlanType;
@@ -76,7 +76,7 @@ export interface PayPalSubscriptionRecord {
 export interface PayPalPaymentHistoryRecord {
   uid: string;
   email: string;
-  provider: "paypal";
+  provider: "paypal" | "stripe";
   paypalTransactionId: string;
   paypalSubscriptionId: string;
   planType: PayPalPlanType;

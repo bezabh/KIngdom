@@ -17,6 +17,7 @@ import {
   ExternalLink,
   Info,
   LogIn,
+  CreditCard,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { InvoiceReceiptModal } from './InvoiceReceiptModal';
@@ -75,6 +76,7 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
   const {
     subscription,
     paypalConfig,
+    stripeConfig,
     paypalEntitlement,
     paypalSubscription,
     billingHistory,
@@ -89,6 +91,7 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
     createPayPalCheckout,
     verifyPayPalSubscription,
     capturePayPalOrder,
+    createStripeMonthlyCheckout,
     cancelSubscription,
     refreshSubscriptionStatus,
   } = useSubscription();
@@ -104,6 +107,7 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
   );
   const [preferFallbackOrder, setPreferFallbackOrder] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isStripeProcessing, setIsStripeProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [pendingApproval, setPendingApproval] = useState<{
     subscriptionId?: string | null;
@@ -356,6 +360,45 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
     }
   };
 
+  const handleStartStripeMonthlyCheckout = async () => {
+    if (!user?.isLoggedIn) {
+      onOpenAuthModal?.(
+        'login',
+        `Sign in with Google/Firebase before subscribing to the €${stripeConfig.monthlyPlan.amount.toFixed(2)}/month plan with Stripe.`
+      );
+      return;
+    }
+
+    setIsStripeProcessing(true);
+    setStatusMessage(null);
+    clearPaymentError();
+    setPayPalOutcomeView('none');
+
+    try {
+      const res = await createStripeMonthlyCheckout();
+      if (!res.success || !res.checkoutUrl) {
+        setPayPalOutcomeView('failed');
+        setStatusMessage({
+          type: 'error',
+          text: res.error || 'Failed to start Stripe monthly checkout.',
+        });
+        return;
+      }
+
+      if (res.checkoutUrl.startsWith('https://')) {
+        window.location.assign(res.checkoutUrl);
+        return;
+      }
+
+      setStatusMessage({
+        type: 'error',
+        text: 'Invalid Stripe Checkout URL returned by server.',
+      });
+    } finally {
+      setIsStripeProcessing(false);
+    }
+  };
+
   const handleCancelSubscriptionConfirm = async () => {
     setIsCanceling(true);
     setStatusMessage(null);
@@ -367,7 +410,7 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
           type: 'info',
           text:
             res.message ||
-            'Your PayPal subscription has been cancelled. Verified Pro access remains active until your paid-through date.',
+            'Your subscription has been cancelled. Verified Pro access remains active until your paid-through date.',
         });
       } else {
         setStatusMessage({
@@ -427,8 +470,23 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-cinzel text-lg sm:text-xl font-black text-[#F3E5AB] tracking-wide">
-                {isTigrinya ? 'ልዑላዊ ክፍሊት ብPayPal' : 'Axumite Pro PayPal Billing'}
+                {isTigrinya ? 'ልዑላዊ ክፍሊት ብStripeን PayPalን' : 'Axumite Pro Billing (Stripe & PayPal)'}
               </h2>
+              <span
+                className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                  stripeConfig.configured
+                    ? stripeConfig.mode === 'live'
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                }`}
+              >
+                {stripeConfig.configured
+                  ? stripeConfig.mode === 'live'
+                    ? 'Stripe Live'
+                    : 'Stripe Test'
+                  : 'Stripe Setup Pending'}
+              </span>
               <span
                 className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
                   paypalConfig.mode === 'live'
@@ -436,13 +494,13 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
                     : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
                 }`}
               >
-                {paypalConfig.mode === 'live' ? 'PayPal Live' : 'PayPal Sandbox Mode'}
+                {paypalConfig.mode === 'live' ? 'PayPal Live' : 'PayPal Sandbox'}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
               {isTigrinya
-                ? 'ዓለምለኻዊ ውሑስ ወርሓውን ዓመታውን ምዝገባ ብPayPal ጥራይ።'
-                : 'Verified recurring Pro subscriptions powered exclusively by PayPal & Firebase Admin.'}
+                ? 'ዓለምለኻዊ ውሑስ ወርሓውን ዓመታውን ምዝገባ ብStripe (€19.90/ወርሒ) ወይ PayPal።'
+                : `Verified recurring Pro subscriptions powered by Stripe (${formatMoney(stripeConfig.monthlyPlan.amount, stripeConfig.monthlyPlan.currency)}/mo) & PayPal.`}
             </p>
           </div>
         </div>
@@ -525,7 +583,9 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
                   Subscription Confirmed & Verified
                 </h3>
                 <p className="text-xs text-emerald-200">
-                  PayPal payment confirmed on our server. All 6 Axumite Pro translator features are unlocked.
+                  {subscription.paymentMethod.provider === 'stripe'
+                    ? 'Stripe monthly payment confirmed on our server. All 6 Axumite Pro translator features are unlocked.'
+                    : 'PayPal payment confirmed on our server. All 6 Axumite Pro translator features are unlocked.'}
                 </p>
               </div>
             </div>
@@ -543,7 +603,11 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
               <strong className="text-white">{subscription.planName}</strong>
             </div>
             <div>
-              <span className="text-slate-400 block">PayPal Subscription ID</span>
+              <span className="text-slate-400 block">
+                {subscription.paymentMethod.provider === 'stripe'
+                  ? 'Stripe Subscription ID'
+                  : 'PayPal Subscription ID'}
+              </span>
               <strong className="font-mono text-emerald-300">
                 {paypalSubscription?.paypalSubscriptionId || 'Verified'}
               </strong>
@@ -592,12 +656,12 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
               <div>
                 <h3 className="text-lg font-black text-white font-cinzel">
                   {paypalOutcomeView === 'cancelled'
-                    ? 'PayPal Checkout Cancelled'
-                    : 'PayPal Payment Verification Failed'}
+                    ? 'Checkout Cancelled'
+                    : 'Payment Verification Failed'}
                 </h3>
                 <p className="text-xs text-rose-200 mt-0.5">
                   {lastPaymentError ||
-                    'No verified PayPal payment was completed. Pro access was not activated.'}
+                    'No verified payment was completed. Pro access was not activated.'}
                 </p>
               </div>
             </div>
@@ -619,10 +683,10 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
               clearPaymentError();
               setActiveTab('checkout');
             }}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#0070BA] to-[#005EA6] text-white text-xs font-bold cursor-pointer inline-flex items-center gap-2"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#635BFF] to-[#0070BA] text-white text-xs font-bold cursor-pointer inline-flex items-center gap-2"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Retry PayPal Checkout</span>
+            <span>Retry Checkout</span>
           </button>
         </div>
       )}
@@ -760,8 +824,72 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
             </div>
           </div>
 
-          {/* Right Column: PayPal Checkout Box & Instructions */}
+          {/* Right Column: Stripe Monthly (€19.90/mo) + PayPal Checkout */}
           <div className="lg:col-span-5 bg-[#121422] border border-[#8E6D28]/40 rounded-2xl p-5 sm:p-6 space-y-5 shadow-2xl">
+            {/* Primary Monthly Subscription (€19.90 / mo) via Stripe */}
+            <div className="bg-gradient-to-br from-[#1B1838] via-[#15182F] to-[#111322] border border-[#635BFF]/50 rounded-2xl p-4 space-y-3 shadow-lg">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-300 block">
+                    Monthly Subscription • Stripe Checkout
+                  </span>
+                  <h3 className="text-base font-bold font-cinzel text-white flex items-center gap-2 mt-0.5">
+                    <CreditCard className="w-4 h-4 text-[#8B85FF]" />
+                    <span>{stripeConfig.monthlyPlan.name}</span>
+                  </h3>
+                </div>
+                <span className="px-2.5 py-1 rounded-lg bg-[#635BFF]/20 border border-[#635BFF]/50 text-[#C4C1FF] text-[10px] font-black uppercase shrink-0">
+                  Stripe
+                </span>
+              </div>
+
+              <div className="flex items-baseline justify-between border-y border-slate-800/80 py-2.5">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-black font-mono text-white">
+                    {formatMoney(stripeConfig.monthlyPlan.amount, stripeConfig.monthlyPlan.currency)}
+                  </span>
+                  <span className="text-xs text-slate-400">/ month</span>
+                </div>
+                <span className="text-[11px] text-emerald-300 font-semibold">
+                  Card, Apple Pay & Google Pay
+                </span>
+              </div>
+
+              <button
+                id="btn-stripe-subscribe-monthly"
+                type="button"
+                disabled={isStripeProcessing}
+                onClick={handleStartStripeMonthlyCheckout}
+                className="w-full py-3.5 px-5 rounded-xl bg-gradient-to-r from-[#635BFF] via-[#554CFF] to-[#463DF2] hover:brightness-110 text-white font-black text-sm shadow-lg shadow-[#635BFF]/25 flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-60"
+              >
+                {isStripeProcessing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Connecting to Stripe...</span>
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4" />
+                    <span>
+                      {isTigrinya
+                        ? `ወርሓዊ ምዝገባ — €${stripeConfig.monthlyPlan.amount.toFixed(2)}/ወርሒ ብStripe`
+                        : `Subscribe Monthly — ${formatMoney(stripeConfig.monthlyPlan.amount, stripeConfig.monthlyPlan.currency)}/mo with Stripe`}
+                    </span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              {!stripeConfig.configured && (
+                <p className="text-[11px] text-amber-300/90 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    Stripe live/test checkout will activate once your Stripe billing keys are configured in server secrets.
+                  </span>
+                </p>
+              )}
+            </div>
+
             <div className="flex items-center justify-between border-b border-slate-800 pb-3.5">
               <div>
                 <h3 className="text-base font-bold font-cinzel text-[#F3E5AB] flex items-center gap-2">
@@ -777,7 +905,7 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
                 </p>
               </div>
               <span className="px-2.5 py-1 rounded-lg bg-[#003087]/40 border border-[#0070BA]/50 text-[#7AD0FF] text-[10px] font-black uppercase">
-                PayPal Only
+                PayPal
               </span>
             </div>
 
@@ -920,7 +1048,7 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
               <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400">
-                Current Plan & PayPal Status
+                Current Plan & Billing Status ({subscription.paymentMethod.provider === 'stripe' ? 'Stripe' : 'PayPal'})
               </span>
               <div className="flex flex-wrap items-center gap-3 mt-1">
                 <h3 className="font-cinzel text-xl font-black text-[#F3E5AB]">
@@ -974,7 +1102,11 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
               <strong className="text-base text-white">{subscription.renewsAt}</strong>
             </div>
             <div className="bg-[#0E101D] border border-slate-800 rounded-xl p-4 space-y-1">
-              <span className="text-slate-400 block">PayPal Subscription ID</span>
+              <span className="text-slate-400 block">
+                {subscription.paymentMethod.provider === 'stripe'
+                  ? 'Stripe Subscription ID'
+                  : 'PayPal Subscription ID'}
+              </span>
               <strong className="font-mono text-amber-300 break-all">
                 {subscription.paypalSubscriptionId || 'None'}
               </strong>
@@ -1006,16 +1138,16 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
         <div className="bg-[#121422] border border-[#8E6D28]/40 rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl animate-fade-in">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-cinzel text-base font-bold text-[#F3E5AB]">PayPal Billing History</h3>
+              <h3 className="font-cinzel text-base font-bold text-[#F3E5AB]">Billing History</h3>
               <p className="text-xs text-slate-400">
-                Verified PayPal payments & webhook settlement ledger for your account.
+                Verified Stripe & PayPal payments and webhook settlement ledger for your account.
               </p>
             </div>
           </div>
 
           {subscription.invoices.length === 0 ? (
             <div className="bg-[#0E101D] border border-slate-800 rounded-xl p-8 text-center text-xs text-slate-400">
-              No PayPal transactions recorded for this account yet.
+              No Stripe or PayPal transactions recorded for this account yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1077,10 +1209,14 @@ export const PaymentSystem: React.FC<PaymentSystemProps> = ({
           <div className="bg-[#121422] border border-rose-500/50 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Shield className="w-5 h-5 text-rose-400" />
-              <span>Cancel PayPal Subscription</span>
+              <span>
+                {subscription.paymentMethod.provider === 'stripe'
+                  ? 'Cancel Stripe Subscription'
+                  : 'Cancel PayPal Subscription'}
+              </span>
             </h3>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Your recurring PayPal billing will stop immediately. If your current period is already paid, your Pro access remains active through{' '}
+              Your recurring billing will stop at period end. If your current period is already paid, your Pro access remains active through{' '}
               <strong className="text-white">{subscription.renewsAt}</strong>.
             </p>
             <div>

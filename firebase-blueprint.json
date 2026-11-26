@@ -89,7 +89,7 @@
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
-        "provider": { "type": "string", "enum": ["paypal"] },
+        "provider": { "type": "string", "enum": ["paypal", "stripe"] },
         "paypalSubscriptionId": { "type": "string" },
         "paypalPlanId": { "type": "string" },
         "planType": { "type": "string", "enum": ["pro_monthly", "pro_yearly"] },
@@ -110,7 +110,7 @@
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
-        "provider": { "type": "string", "enum": ["paypal"] },
+        "provider": { "type": "string", "enum": ["paypal", "stripe"] },
         "paypalTransactionId": { "type": "string" },
         "paypalSubscriptionId": { "type": "string" },
         "amount": { "type": "number" },
